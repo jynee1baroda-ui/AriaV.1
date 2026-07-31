@@ -45,6 +45,7 @@ class MigrationTests(unittest.TestCase):
         tables = set(inspect(self._engine).get_table_names())
         self.assertIn("sessions", tables)
         self.assertIn("messages", tables)
+        self.assertIn("memories", tables)
         self.assertIn("alembic_version", tables)
 
         # The composite index from the models must exist.

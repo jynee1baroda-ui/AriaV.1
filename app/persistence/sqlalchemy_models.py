@@ -9,6 +9,9 @@ Schema decisions:
     unique, validated natural key; no surrogate id needed.
   * messages references sessions via a foreign key with ON DELETE
     CASCADE: deleting a session removes its messages.
+  * memories references sessions with ON DELETE SET NULL: a memory is
+    owned by the ASSISTANT, not the session - deleting a session keeps
+    the facts it taught (only the provenance link is dropped).
   * The composite index (session_id, id) serves "all messages for a
     session in order" without a sort - index order IS the answer.
   * A CHECK constraint enforces the role whitelist at the data layer,
@@ -79,3 +82,48 @@ class MessageModel(Base):
 
     def __repr__(self) -> str:
         return f"<MessageModel id={self.id} role={self.role!r}>"
+
+
+class MemoryModel(Base):
+    """One durable memory the assistant can recall later.
+
+    Phase 5, Milestone 1. The ownership model differs deliberately from
+    messages:
+
+      * messages belong to a session  -> ON DELETE CASCADE
+      * memories belong to the ASSISTANT -> ON DELETE SET NULL
+
+    A memory is learned IN a session (session_id is provenance), but
+    long-term memory must OUTLIVE it - recall in session B a fact
+    learned in session A. Deleting a session therefore keeps its
+    memories, dropping only the provenance link.
+
+    category is a plain string with a Python-side whitelist rather than
+    a CHECK constraint: unlike roles, the category set is expected to
+    grow (Phase 8 adds "entity" for RAG). Every growth would otherwise
+    demand a migration.
+    """
+
+    __tablename__ = "memories"
+    __table_args__ = (
+        Index("ix_memories_session_id", "session_id"),
+        Index("ix_memories_created_at", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str] = mapped_column(String(16), nullable=False, default="fact")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+    # The relationship exists primarily so SQLAlchemy's unit of work
+    # INSERTs the parent session row BEFORE this memory row (without it,
+    # the FK ordering is unknown and flushes can violate the constraint).
+    session: Mapped["SessionModel | None"] = relationship()
+
+    def __repr__(self) -> str:
+        return f"<MemoryModel id={self.id} category={self.category!r}>"

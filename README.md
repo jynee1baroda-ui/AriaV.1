@@ -5,19 +5,20 @@ roadmap. See the current phase below.
 
 ## Status
 
-- **Phase 4 (Database Integration)**: Milestone 4 complete — schema is
-  versioned and reversible with Alembic. The app runs `alembic upgrade
-  head` on startup (never `create_all`); migrations live in
-  `alembic/versions/` and are recorded in the `alembic_version` table.
-  Tests prove upgrade and downgrade against a throwaway DB. 72 passing
-  tests.
-- **Phase 4, Milestone 3**: `/api/v1/ready` readiness probe with real DB
-  check (liveness vs readiness distinction); dead file-session code
-  removed.
-- **Phase 4, Milestone 2**: storage moved to `MessageRepository`
-  (SQLAlchemy); incremental inserts; `StorageError` wrapping.
-- **Phase 4, Milestone 1**: SQLAlchemy infra, `sessions`/`messages`
-  schema (FK cascade, CHECK constraint, composite index), lifespan init.
+- **Phase 5 (Memory System)**: Milestone 1 complete — the long-term
+  memory STORAGE layer: `memories` table via Alembic migration, a
+  `Memory` domain model, and `MemoryRepository`. Key design decision:
+  memories belong to the ASSISTANT, not a session (FK `ON DELETE SET
+  NULL`) — deleting a session keeps the facts it taught. Consolidation
+  and retrieval arrive in M2. 83 passing tests.
+- **Phase 4 (Database Integration)**: complete. Schema is versioned and
+  reversible with Alembic — the app runs `alembic upgrade head` on
+  startup; migrations in `alembic/versions/`, recorded in
+  `alembic_version`.
+  - M4: Alembic migrations (upgrade/downgrade tested).
+  - M3: `/api/v1/ready` readiness probe; dead file-session code removed.
+  - M2: storage moved to `MessageRepository`; incremental inserts.
+  - M1: SQLAlchemy infra, `sessions`/`messages` schema, lifespan init.
 - Phase 1 (Programming Fundamentals) complete — REPL assistant with
   persistent memory, exception hierarchy, atomic file writes, git/GitHub.
 

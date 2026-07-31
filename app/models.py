@@ -15,12 +15,41 @@ only interact through the methods we expose.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from app.errors import InvalidRoleError
 
 # The only roles the system knows. A tuple (not a list) because it is
 # immutable - validation rules must never be accidentally mutated.
 VALID_ROLES: tuple[str, ...] = ("user", "assistant")
+
+# The known memory categories. A plain tuple (like VALID_ROLES) but NOT
+# enforced by a CHECK constraint: this set is expected to GROW (Phase 8
+# adds "entity" for RAG), unlike roles which are closed forever.
+VALID_MEMORY_CATEGORIES: tuple[str, ...] = ("fact", "preference", "knowledge")
+
+
+@dataclass
+class Memory:
+    """One durable fact the assistant can recall across sessions.
+
+    Phase 5, Milestone 1. The storage half of long-term memory: a fact
+    learned in one conversation, kept so a FUTURE session can use it.
+
+    Attributes:
+        id: Database-assigned row id (used to delete a memory).
+        content: The fact itself ("the user's name is Alice").
+        category: What kind of memory - fact, preference, knowledge.
+        session_id: Provenance - which session this was learned in.
+            None for memories not tied to any session.
+        created_at: When it was stored (timezone-aware).
+    """
+
+    id: int
+    content: str
+    category: str = "fact"
+    session_id: str | None = None
+    created_at: datetime | None = None
 
 
 @dataclass
