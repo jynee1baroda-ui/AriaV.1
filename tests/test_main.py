@@ -1,9 +1,14 @@
 """Tests for the Assistant class."""
 
+import tempfile
 import unittest
+from pathlib import Path
 
 from app.assistant import Assistant
-from app.models import Conversation
+from app.db import build_engine, init_db
+from app.models import Conversation, Memory
+from app.persistence.memory_repository import MemoryRepository
+from app.services.memory_service import MemoryService
 
 
 class TestAssistant(unittest.TestCase):
@@ -63,6 +68,112 @@ class TestAssistant(unittest.TestCase):
         keep_going, output = self.assistant.handle_command("/bogus")
         self.assertTrue(keep_going)
         self.assertIn("Unknown command", output)
+
+
+class TestAssistantStatementConfirmation(unittest.TestCase):
+    """Statements that teach facts get confirmation replies (M2)."""
+
+    def setUp(self) -> None:
+        self.assistant = Assistant(name="Aria", conversation=Conversation())
+
+    def test_name_statement_confirms(self) -> None:
+        self.assertIn("Alice", self.assistant.respond("my name is Alice"))
+
+    def test_like_statement_confirms(self) -> None:
+        self.assertIn("coffee", self.assistant.respond("i like coffee"))
+
+    def test_remember_statement_confirms(self) -> None:
+        self.assertIn("the sky is blue", self.assistant.respond("remember that the sky is blue"))
+
+
+class TestAssistantMemoryAnswers(unittest.TestCase):
+    """Questions answered from working-context memories (M2)."""
+
+    def setUp(self) -> None:
+        self.conversation = Conversation()
+
+    def make_assistant(self, memories: list[Memory]) -> Assistant:
+        return Assistant(name="Aria", conversation=self.conversation, memories=memories)
+
+    def test_name_question_answered_from_memory(self) -> None:
+        assistant = self.make_assistant([Memory(id=1, content="the user's name is Alice")])
+        self.assertEqual(assistant.respond("what is my name"), "Your name is Alice.")
+
+    def test_name_question_without_memory_says_so(self) -> None:
+        assistant = self.make_assistant([])
+        self.assertEqual(
+            assistant.respond("what is my name"),
+            "I don't know your name yet. Tell me with 'my name is ...'",
+        )
+
+    def test_favorite_question_answered_from_memory(self) -> None:
+        assistant = self.make_assistant(
+            [Memory(id=1, content="the user's favorite book is Dune")]
+        )
+        self.assertEqual(
+            assistant.respond("what is my favorite book"),
+            "Your favorite book is Dune.",
+        )
+
+    def test_like_question_answered_from_memory(self) -> None:
+        assistant = self.make_assistant([Memory(id=1, content="the user likes coffee")])
+        self.assertEqual(assistant.respond("do i like coffee"), "You like coffee.")
+
+    def test_dislike_question_answered_from_memory(self) -> None:
+        assistant = self.make_assistant([Memory(id=1, content="the user dislikes spiders")])
+        self.assertEqual(
+            assistant.respond("do i like spiders"),
+            "You don't like spiders.",
+        )
+
+
+class TestAssistantMemoryCommands(unittest.TestCase):
+    """/memory and /remember need a wired MemoryService (CLI mode)."""
+
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.engine = build_engine(
+            f"sqlite:///{(Path(self._tmpdir.name) / 'cli.db').as_posix()}"
+        )
+        init_db(self.engine)
+        self.memory_service = MemoryService(MemoryRepository(self.engine))
+        self.assistant = Assistant(
+            name="Aria",
+            conversation=Conversation(),
+            session_id="cli",
+            memory_service=self.memory_service,
+        )
+
+    def tearDown(self) -> None:
+        self.engine.dispose()
+        self._tmpdir.cleanup()
+
+    def test_remember_command_stores_fact(self) -> None:
+        keep_going, output = self.assistant.handle_command("/remember the sky is green")
+        self.assertTrue(keep_going)
+        self.assertIn("the sky is green", output)
+        stored = self.memory_service.get_all()
+        self.assertEqual(stored[0].content, "the sky is green")
+
+    def test_memory_command_lists_stored_facts(self) -> None:
+        self.assistant.handle_command("/remember the sky is green")
+        keep_going, output = self.assistant.handle_command("/memory")
+        self.assertTrue(keep_going)
+        self.assertIn("the sky is green", output)
+        self.assertIn("1 long-term memories", output)
+
+    def test_memory_command_empty_state(self) -> None:
+        keep_going, output = self.assistant.handle_command("/memory")
+        self.assertIn("I don't remember anything yet", output)
+
+    def test_respond_consolidates_through_wired_service(self) -> None:
+        self.assistant.respond("my name is Alice")
+        stored = self.memory_service.get_all()
+        self.assertEqual(stored[0].content, "the user's name is Alice")
+
+    def test_respond_answers_from_memory_after_consolidation(self) -> None:
+        self.assistant.respond("my name is Alice")
+        self.assertEqual(self.assistant.respond("what is my name"), "Your name is Alice.")
 
 
 if __name__ == "__main__":

@@ -32,6 +32,7 @@ if __package__ in (None, ""):
 from app import config, storage
 from app.assistant import Assistant
 from app.models import Conversation
+from app.services.memory_service import MemoryService
 
 logging.basicConfig(
     level=logging.INFO,
@@ -45,8 +46,16 @@ def main() -> NoReturn:
     # 1. Load long-term memory from disk (Lesson 3).
     conversation = Conversation(storage.load_history())
 
-    # 2. Build the assistant around that memory (composition).
-    assistant = Assistant(name=config.ASSISTANT_NAME, conversation=conversation)
+    # 2. Build the assistant around that memory (composition). The
+    #    MemoryService (Phase 5 M2) gives it long-term memory that
+    #    survives across sessions via the database.
+    memory_service = MemoryService()
+    assistant = Assistant(
+        name=config.ASSISTANT_NAME,
+        conversation=conversation,
+        session_id="cli",
+        memory_service=memory_service,
+    )
 
     # 3. Run, and GUARANTEE persistence on every exit path.
     #    finally runs no matter HOW this block ends: normal return,

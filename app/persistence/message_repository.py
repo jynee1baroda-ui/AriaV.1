@@ -39,6 +39,16 @@ class MessageRepository:
     def __init__(self, engine: Engine | None = None) -> None:
         self._engine: Engine = engine or db.engine
 
+    @property
+    def engine(self) -> Engine:
+        """The backing engine.
+
+        Public so other services built on the same database (e.g.
+        MemoryService) can share a test-injected temp engine instead of
+        silently reaching for the real data/assistant.db.
+        """
+        return self._engine
+
     def ping(self) -> bool:
         """Verify the database is reachable and responsive.
 

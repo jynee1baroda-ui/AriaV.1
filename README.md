@@ -5,12 +5,18 @@ roadmap. See the current phase below.
 
 ## Status
 
-- **Phase 5 (Memory System)**: Milestone 1 complete — the long-term
-  memory STORAGE layer: `memories` table via Alembic migration, a
-  `Memory` domain model, and `MemoryRepository`. Key design decision:
-  memories belong to the ASSISTANT, not a session (FK `ON DELETE SET
-  NULL`) — deleting a session keeps the facts it taught. Consolidation
-  and retrieval arrive in M2. 83 passing tests.
+- **Phase 5 (Memory System)**: Milestone 2 complete — memory is now
+  *meaningful*: `MemoryExtractor` distills statements ("my name is
+  Alice", "i like coffee", "remember that X") into canonical facts;
+  `MemoryService.consolidate()` dedups and stores them; `retrieve()`
+  pulls relevant facts so the Assistant answers questions across
+  sessions ("what is my name" → "Your name is Alice."). Rule-based
+  until the LLM (Phase 7) and RAG (Phase 8) arrive. CLI gained
+  `/remember` and `/memory`. 123 passing tests.
+- **Phase 5, Milestone 1**: long-term memory STORAGE layer —
+  `memories` table via Alembic, `MemoryRepository`. Ownership design:
+  memories belong to the ASSISTANT (FK `ON DELETE SET NULL`), so
+  deleting a session keeps the facts it taught.
 - **Phase 4 (Database Integration)**: complete. Schema is versioned and
   reversible with Alembic — the app runs `alembic upgrade head` on
   startup; migrations in `alembic/versions/`, recorded in

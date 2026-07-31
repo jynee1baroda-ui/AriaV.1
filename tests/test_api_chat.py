@@ -156,5 +156,19 @@ class TestSessionIsolation(ChatApiTestCase):
         self.assertEqual(hist_b["messages"][0]["content"], "hey")
 
 
+class TestLongTermMemoryApi(ChatApiTestCase):
+    """Phase 5 M2: memory must flow through the real HTTP layer."""
+
+    def test_memory_survives_sessions_and_restart(self) -> None:
+        self.client.post("/api/v1/chat", json={"session_id": "mem-1", "message": "my name is Alice"})
+
+        # A different session - and a fresh service lifecycle would be
+        # identical, because memory lives in the shared database.
+        response = self.client.post(
+            "/api/v1/chat", json={"session_id": "mem-2", "message": "what is my name"}
+        )
+        self.assertEqual(response.json()["reply"], "Your name is Alice.")
+
+
 if __name__ == "__main__":
     unittest.main()

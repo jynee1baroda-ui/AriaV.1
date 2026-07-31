@@ -17,9 +17,18 @@ import sys
 from typing import NoReturn
 
 from app import config
-from app.models import Conversation
+from app.models import Conversation, Memory
+from app.services.memory_service import MemoryExtractor, MemoryService
 
 logger = logging.getLogger("assistant")
+
+# Canonical prefix constants - the exact strings MemoryExtractor writes
+# for the facts the Assistant answers from long-term memory.
+_NAME_MEMORY_PREFIX = "the user's name is "
+_USER_PREFIX = "the user's "
+_LIKES_PREFIX = "the user likes "
+_DISLIKES_PREFIX = "the user dislikes "
+_PREFERS_PREFIX = "the user prefers "
 
 
 class Assistant:
@@ -28,11 +37,26 @@ class Assistant:
     Attributes:
         name: The assistant's display name.
         conversation: The Conversation object holding all messages.
+        memories: Working-context memories retrieved for the current
+            exchange (used to answer from long-term memory).
+        session_id: Identifies this conversation to the memory store.
+        memory_service: Optional memory organ. When wired, respond()
+            consolidates new facts and refreshes memories each turn.
     """
 
-    def __init__(self, name: str, conversation: Conversation) -> None:
+    def __init__(
+        self,
+        name: str,
+        conversation: Conversation,
+        memories: list[Memory] | None = None,
+        session_id: str | None = None,
+        memory_service: MemoryService | None = None,
+    ) -> None:
         self.name = name
         self.conversation = conversation
+        self.memories: list[Memory] = list(memories) if memories else []
+        self.session_id = session_id
+        self.memory_service = memory_service
 
     # ------------------------------------------------------------------
     # Core behavior
@@ -44,12 +68,22 @@ class Assistant:
         self.conversation (adds user + assistant messages). This is
         intentional - a chatbot should remember everything it processes.
 
+        When a memory_service is wired (Phase 5 M2), respond() ALSO
+        consolidates facts from this turn and refreshes the working
+        context BEFORE answering - so a statement like "my name is
+        Alice" is stored, and a question like "what is my name" is
+        answered from long-term memory, even across sessions.
+
         Args:
             user_input: The text the user typed.
 
         Returns:
             The reply text.
         """
+        if self.memory_service is not None and self.session_id is not None:
+            self.memory_service.consolidate(self.session_id, user_input)
+            self.memories = self.memory_service.retrieve(user_input)
+
         # Normalise: lowercase + strip punctuation/spaces so "HELLO!!"
         # matches "hello" - the foundation of all NLP preprocessing.
         normalized: str = user_input.lower().strip(" !?.,;:")
@@ -62,11 +96,64 @@ class Assistant:
         elif normalized in {"what is your name", "what's your name", "who are you"}:
             reply = f"My name is {self.name}."
         else:
-            reply = f"You said: {user_input}"
+            # STATEMENTS that teach a fact are answered from the text
+            # itself; the extractor also supplies the confirmation text.
+            extracted = MemoryExtractor.extract(user_input)
+            if extracted:
+                reply = extracted[0].reply
+            else:
+                # QUESTIONS that consult long-term memory come next.
+                reply = self._answer_from_memory(normalized) or f"You said: {user_input}"
 
         self.conversation.add("user", user_input)
         self.conversation.add("assistant", reply)
         return reply
+
+    def _answer_from_memory(self, normalized: str) -> str | None:
+        """Answer a memory-backed question, or None if not a question.
+
+        Returns:
+            The memory answer, or None to fall through to the echo.
+        """
+        if normalized in {
+            "what is my name",
+            "what's my name",
+            "whats my name",
+            "do you remember my name",
+            "do you know my name",
+        }:
+            return self._answer_name()
+        if "favorite" in normalized or "favourite" in normalized:
+            return self._answer_favorite()
+        if "like" in normalized or "dislike" in normalized or "prefer" in normalized:
+            return self._answer_like_dislike()
+        return None
+
+    def _answer_name(self) -> str:
+        """Answer the name question from working-context memories."""
+        for memory in self.memories:
+            if memory.content.startswith(_NAME_MEMORY_PREFIX):
+                value = memory.content[len(_NAME_MEMORY_PREFIX):]
+                return f"Your name is {value}."
+        return "I don't know your name yet. Tell me with 'my name is ...'"
+
+    def _answer_favorite(self) -> str:
+        """Answer a favorite question from working-context memories."""
+        favorites = [m for m in self.memories if "favorite" in m.content]
+        if favorites:
+            return f"Your {favorites[0].content[len(_USER_PREFIX):]}."
+        return "I don't know your favorites yet. Tell me with 'my favorite <thing> is ...'"
+
+    def _answer_like_dislike(self) -> str:
+        """Answer a like/dislike question from working-context memories."""
+        for memory in self.memories:
+            if memory.content.startswith(_LIKES_PREFIX):
+                return f"You like {memory.content[len(_LIKES_PREFIX):]}."
+            if memory.content.startswith(_DISLIKES_PREFIX):
+                return f"You don't like {memory.content[len(_DISLIKES_PREFIX):]}."
+            if memory.content.startswith(_PREFERS_PREFIX):
+                return f"You prefer {memory.content[len(_PREFERS_PREFIX):]}."
+        return "I don't remember what you like yet."
 
     def handle_command(self, command: str) -> tuple[bool, str]:
         """Process a slash-command WITHOUT printing (testability).
@@ -82,7 +169,10 @@ class Assistant:
             (should_the_session_continue, text_to_display).
         """
         if command == "/help":
-            return True, "Commands: /help  /stats  /about  /exit"
+            return (
+                True,
+                "Commands: /help  /stats  /about  /memory  /remember <fact>  /exit",
+            )
         if command == "/stats":
             counts: dict[str, int] = self.conversation.count_by_role()
             return (
@@ -91,6 +181,22 @@ class Assistant:
                 f"(user={counts.get('user', 0)}, "
                 f"assistant={counts.get('assistant', 0)}) across my sessions.",
             )
+        if command == "/memory":
+            if self.memory_service is None:
+                return True, "Long-term memory is not available in this mode."
+            memories = self.memory_service.get_all()
+            if not memories:
+                return True, "I don't remember anything yet."
+            lines = "\n".join(f"  - {m.content}" for m in memories)
+            return True, f"I remember {len(memories)} long-term memories:\n{lines}"
+        if command.startswith("/remember "):
+            if self.memory_service is None:
+                return True, "Long-term memory is not available in this mode."
+            content = command[len("/remember "):].strip()
+            if not content:
+                return True, "Usage: /remember <something to remember>"
+            self.memory_service.add(content, category="fact", session_id=self.session_id)
+            return True, f"Okay, I'll remember that: {content}"
         if command == "/about":
             return (
                 True,

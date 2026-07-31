@@ -87,5 +87,28 @@ class TestChatServiceValidation(TempDbTestCase):
         self.assertEqual(reply, "Hello! I'm Aria. How can I help?")
 
 
+class TestMemoryAcrossSessions(TempDbTestCase):
+    """Phase 5 M2: a fact learned in one session is recalled in another."""
+
+    def test_name_learned_in_one_session_recalled_in_another(self) -> None:
+        service = self.make_service()
+        service.process("session-a", "my name is Alice")
+
+        service.process("session-b", "what is my name")
+        history = service.get_history("session-b")
+        # The reply is the LAST assistant message of the exchange.
+        self.assertEqual(history[-1].content, "Your name is Alice.")
+
+    def test_repeated_teaching_does_not_duplicate_memory(self) -> None:
+        service = self.make_service()
+        service.process("session-a", "my name is Alice")
+        service.process("session-b", "my name is Alice")
+
+        from app.persistence.memory_repository import MemoryRepository
+
+        count = MemoryRepository(service._repository.engine).count()
+        self.assertEqual(count, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

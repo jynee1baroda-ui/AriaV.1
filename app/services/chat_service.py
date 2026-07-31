@@ -25,16 +25,27 @@ from app import config
 from app.assistant import Assistant
 from app.errors import InvalidSessionIdError
 from app.models import Conversation, Message
+from app.persistence.memory_repository import MemoryRepository
 from app.persistence.message_repository import MessageRepository
+from app.services.memory_service import MemoryService
 
 
 class ChatService:
     """Thread-safe, persistent store of per-session conversations."""
 
-    def __init__(self, repository: MessageRepository | None = None) -> None:
+    def __init__(
+        self,
+        repository: MessageRepository | None = None,
+        memory_service: MemoryService | None = None,
+    ) -> None:
         # Injection point: tests build a repository over a temp database
-        # so test sessions never touch the real data/assistant.db.
+        # so test sessions never touch the real data/assistant.db. The
+        # memory service shares the SAME engine, keeping memory and
+        # messages isolated to whichever database the test chose.
         self._repository = repository or MessageRepository()
+        self._memory = memory_service or MemoryService(
+            MemoryRepository(self._repository.engine)
+        )
         self._sessions: dict[str, Conversation] = {}
         # One lock guarding ALL session access. Correct and simple.
         # (Improvement for Phase 7: per-session locks, so a slow chat
@@ -62,8 +73,15 @@ class ChatService:
             conversation = self._load_or_create(session_id)
             before: int = len(conversation)
             # A fresh Assistant is cheap and stateless (name + logic);
-            # respond() records both sides into the shared conversation.
-            assistant = Assistant(name=config.ASSISTANT_NAME, conversation=conversation)
+            # respond() records both sides into the shared conversation
+            # AND consolidates/retrieves long-term memory (the memory
+            # hook is wired because we pass a MemoryService).
+            assistant = Assistant(
+                name=config.ASSISTANT_NAME,
+                conversation=conversation,
+                session_id=session_id,
+                memory_service=self._memory,
+            )
             reply = assistant.respond(message)
             # Persist ONLY the messages appended by this turn
             # (incremental insert - the relational best practice).
