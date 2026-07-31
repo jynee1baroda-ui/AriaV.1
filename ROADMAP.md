@@ -13,7 +13,7 @@ completed phase leaves a working project behind.
 | 4 | Machine Learning | ✅ complete |
 | 5 | Deep Learning | ✅ complete |
 | 6 | Transformers | ✅ complete |
-| 7 | Large Language Models | ⬜ |
+| 7 | Large Language Models | 🔶 M1 complete (real LLM answers) |
 | 8 | Prompt Engineering | ⬜ |
 | 9 | RAG | ⬜ |
 | 10 | Memory Systems | 🔶 foundation built (preview) |
@@ -30,6 +30,11 @@ completed phase leaves a working project behind.
 
 ## Notes
 
+- **Phase 7 (Large Language Models)** M1 complete: a pre-trained
+  causal LM (`HuggingFaceTB/SmolLM2-135M`, ~270 MB, runs on CPU) is
+  wired into the echo fallback via `app/llm/generator.py`. Lazy load,
+  graceful degradation to the echo, stub-injectable for tests. M2 adds
+  a conversation context window + honest capability assessment.
 - **Phase 10 (Memory Systems)** is the only phase with work done ahead
   of schedule: `memories` table, `MemoryRepository`, `MemoryService`
   (consolidation + retrieval). It is the storage foundation that RAG

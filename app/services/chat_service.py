@@ -39,6 +39,7 @@ class ChatService:
         repository: MessageRepository | None = None,
         memory_service: MemoryService | None = None,
         router: IntentRouter | None = None,
+        llm: object | None = None,
     ) -> None:
         # Injection point: tests build a repository over a temp database
         # so test sessions never touch the real data/assistant.db. The
@@ -52,6 +53,9 @@ class ChatService:
         # One router per service, reused across turns and threads - it
         # lazily loads the model once and gates on confidence.
         self._router = router
+        # Phase 7 M1: the shared LLM answer engine (or None = echo only).
+        # Like the router, it lazily loads the model on first use.
+        self._llm = llm
         self._sessions: dict[str, Conversation] = {}
         # One lock guarding ALL session access. Correct and simple.
         # (Improvement for Phase 7: per-session locks, so a slow chat
@@ -88,6 +92,7 @@ class ChatService:
                 session_id=session_id,
                 memory_service=self._memory,
                 router=self._router,
+                llm=self._llm,
             )
             reply = assistant.respond(message)
             # Persist ONLY the messages appended by this turn

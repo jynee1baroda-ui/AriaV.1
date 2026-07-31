@@ -111,3 +111,18 @@ INTENT_CONFIDENCE_THRESHOLD: float = 0.5
 #                   at 60.5% without pre-training; the architecture is
 #                   the Phase 7 foundation).
 INTENT_MODEL_KIND: str = "linear"
+
+# LLM question answering (Phase 7, M1): a pre-trained causal language
+# model generates answers for anything the deterministic rules cannot
+# handle. The model is loaded lazily on the first unanswered question
+# and only from Hugging Face when LLM_LOCAL_FILES_ONLY is False (set it
+# True to run strictly offline against the local cache). Temperature
+# below 1 makes answers more deterministic; tiny models become less
+# coherent above ~0.7. The token budget is small on purpose: a 135M
+# base model drifts into noise after a sentence or two - short answers
+# are GOOD.
+LLM_ENABLED: bool = True
+LLM_MODEL_ID: str = "HuggingFaceTB/SmolLM2-135M"
+LLM_MAX_NEW_TOKENS: int = 32
+LLM_TEMPERATURE: float = 0.2
+LLM_LOCAL_FILES_ONLY: bool = False

@@ -20,6 +20,7 @@ from fastapi.responses import JSONResponse
 from app import config, db
 from app.api.routes import router
 from app.errors import InvalidSessionIdError
+from app.llm.generator import LLMGenerator
 from app.security.rate_limiter import RateLimiter
 from app.services.chat_service import ChatService
 from app.services.intent_router import IntentRouter
@@ -56,9 +57,13 @@ def create_app() -> FastAPI:
     # it via Depends(), which keeps them testable (an override can swap
     # a fake service in without touching route code). The ML intent
     # router (Phase 4 M2) is shared across requests and degrades to
-    # rules if the model artifact is missing.
+    # rules if the model artifact is missing. The LLM answer engine
+    # (Phase 7 M1) is shared too and degrades to the echo if the model
+    # cannot be loaded. Its load is LAZY, so startup stays fast and the
+    # model only downloads on the first unanswered question.
     app.state.chat_service = ChatService(
-        router=IntentRouter() if config.INTENT_CLASSIFIER_ENABLED else None
+        router=IntentRouter() if config.INTENT_CLASSIFIER_ENABLED else None,
+        llm=LLMGenerator() if config.LLM_ENABLED else None,
     )
 
     # The abuse guard: one limiter shared by every request. Routes

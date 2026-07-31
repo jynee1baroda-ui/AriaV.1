@@ -16,11 +16,13 @@ import logging
 from typing import TYPE_CHECKING
 
 from app import config
+from app.llm.generator import qa_prompt
 from app.ml.dataset import Intent
 from app.models import Conversation, Memory
 from app.services.memory_service import MemoryExtractor, MemoryService
 
 if TYPE_CHECKING:
+    from app.llm.generator import LLMGenerator
     from app.services.intent_router import IntentRouter
 
 logger = logging.getLogger("assistant")
@@ -55,6 +57,7 @@ class Assistant:
         session_id: str | None = None,
         memory_service: MemoryService | None = None,
         router: IntentRouter | None = None,
+        llm: LLMGenerator | None = None,
     ) -> None:
         self.name = name
         self.conversation = conversation
@@ -65,6 +68,10 @@ class Assistant:
         # shot at every message; when it declines (low confidence or
         # model unavailable) the deterministic rules answer instead.
         self.router = router
+        # Phase 7 M1: the LLM answer engine. It is the last resort for
+        # anything the rules cannot handle (i.e. the old echo). When
+        # absent - or when it fails - the echo remains the floor.
+        self.llm = llm
 
     # ------------------------------------------------------------------
     # Core behavior
@@ -141,7 +148,7 @@ class Assistant:
             return extracted[0].reply if extracted else None
         if intent is Intent.RECALL_QUESTION:
             return self._answer_from_memory(normalized)
-        return f"You said: {user_input}"  # Intent.OTHER
+        return self._fallback_answer(user_input)  # Intent.OTHER
 
     def _rule_reply(self, user_input: str, normalized: str) -> str:
         """Deterministic fallback - the original Phase 1-3 dispatch.
@@ -170,7 +177,31 @@ class Assistant:
         if extracted:
             return extracted[0].reply
         # QUESTIONS that consult long-term memory come next.
-        return self._answer_from_memory(normalized) or f"You said: {user_input}"
+        return self._answer_from_memory(normalized) or self._fallback_answer(user_input)
+
+    def _fallback_answer(self, user_input: str) -> str:
+        """Answer what the rules cannot - or admit defeat gracefully.
+
+        Phase 7 M1: this is the old echo, upgraded. The deterministic
+        rules win on greetings, identity, taught facts and stored
+        memories; EVERYTHING else goes to the LLM. If no LLM is wired
+        (or it failed to load), the echo is the honest floor - better to
+        reflect the input than to fabricate an answer.
+
+        Args:
+            user_input: The raw text the rules could not answer.
+
+        Returns:
+            The LLM's answer, or the echo fallback.
+        """
+        if self.llm is not None:
+            answer = self.llm.generate(qa_prompt(user_input))
+            # Guard: a tiny base model sometimes answers by REPEATING
+            # the question. Parroting the input is not answering - fall
+            # through to the echo, which is at least honest.
+            if answer and answer.strip().lower() != user_input.strip().lower():
+                return answer
+        return f"You said: {user_input}"
 
     def _answer_from_memory(self, normalized: str) -> str | None:
         """Answer a memory-backed question, or None if not a question.

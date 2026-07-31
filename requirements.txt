@@ -14,3 +14,6 @@ joblib==1.6.0
 # Phase 5 (Deep Learning): neural intent classifier (CPU build is the
 # default wheel on Windows; CUDA builds come from the PyTorch index).
 torch==2.13.0
+# Phase 7 (Large Language Models): load pre-trained models locally.
+transformers==5.14.1
+safetensors==0.8.0

@@ -5,6 +5,17 @@ roadmap. See the current phase below.
 
 ## Status
 
+- **Phase 7 (Large Language Models)**: M1 complete — a pre-trained
+  causal LM (`HuggingFaceTB/SmolLM2-135M`, runs on CPU, lazy-loaded on
+  the first unanswered question) now answers whatever the rules cannot
+  (`app/llm/generator.py`). Ask "what is 2+2" and get "4". Priority
+  stays: rules → taught facts → long-term memory → LLM → echo. It
+  degrades to the echo offline, and honestly reveals its limits (a 135M
+  base model has no world model: it answered "how many continents" with
+  "14", and parroting the question is detected and rejected). M2 adds a
+  conversation context window. `LLM_ENABLED`/`LLM_MODEL_ID`/
+  `LLM_MAX_NEW_TOKENS`/`LLM_TEMPERATURE`/`LLM_LOCAL_FILES_ONLY` in
+  `app/config.py`.
 - **Phase 6 (Transformers)**: complete — the transformer architecture
   built from scratch (`app/transformer/`): sinusoidal positional
   encoding, multi-head scaled dot-product attention, pre-norm encoder
@@ -36,7 +47,7 @@ roadmap. See the current phase below.
 - **Engineering hardening**: rate limiting on `POST /chat` (fixed-window
   per-IP, 429 + Retry-After, probes exempt) and pagination on
   `GET /history` (`limit` 1–500, `offset` ≥ 0, self-describing
-  `total`/`limit`/`offset`). 140 passing tests.
+  `total`/`limit`/`offset`). 234 passing tests.
 - **Phase 10 (Memory System) preview**: consolidation + retrieval of
   long-term memory: `MemoryExtractor` distills statements, dedup stores
   them, and the Assistant answers across sessions (rule-based until RAG
