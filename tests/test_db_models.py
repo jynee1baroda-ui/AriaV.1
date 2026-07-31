@@ -13,7 +13,7 @@ from sqlalchemy import inspect, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.db import Base, build_engine, init_db
+from app.db import build_engine, init_db
 from app.persistence.sqlalchemy_models import MessageModel, SessionModel
 
 

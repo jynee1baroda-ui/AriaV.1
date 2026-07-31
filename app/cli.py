@@ -6,7 +6,7 @@ way to drive the assistant.
 
 Run with:
     python -m app.cli
-    python app\cli.py
+    python app/cli.py
 
 Responsibilities:
   * build the object graph (Conversation, Assistant)

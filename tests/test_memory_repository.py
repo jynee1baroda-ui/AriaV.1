@@ -18,7 +18,7 @@ from sqlalchemy import delete
 from app.db import build_engine, init_db
 from app.errors import StorageError
 from app.persistence.memory_repository import MemoryRepository
-from app.persistence.sqlalchemy_models import MemoryModel, SessionModel
+from app.persistence.sqlalchemy_models import SessionModel
 
 
 class RepositoryTestCase(unittest.TestCase):

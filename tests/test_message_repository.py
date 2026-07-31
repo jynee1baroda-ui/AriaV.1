@@ -10,7 +10,7 @@ from app.db import build_engine, init_db
 from app.errors import StorageError
 from app.models import Message
 from app.persistence.message_repository import MessageRepository
-from app.persistence.sqlalchemy_models import MessageModel, SessionModel
+from app.persistence.sqlalchemy_models import SessionModel
 
 
 class RepositoryTestCase(unittest.TestCase):

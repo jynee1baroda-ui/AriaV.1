@@ -36,7 +36,7 @@ ASSISTANT_VERSION: str = "0.1.0"
 ASSISTANT_INFO: dict[str, str] = {
     "name": ASSISTANT_NAME,
     "version": ASSISTANT_VERSION,
-    "phase": "Phase 1 - Programming Fundamentals",
+    "phase": "Phase 5 - Memory System",
     "creator": "You",
 }
 
@@ -51,10 +51,10 @@ GREETING_WORDS: set[str] = {"hello", "hi", "hey", "yo", "hiya", "hola"}
 # REPL_PROMPT is the text shown before each input.
 REPL_PROMPT: str = "You> "
 
-# Whitelist for session identifiers. Sessions become FILE NAMES in M3,
-# so this pattern is a security control (path traversal defense), not
-# just a style rule. Only letters, digits, underscore, hyphen - never
-# dots or slashes that could escape the sessions directory.
+# Whitelist for session identifiers. Sessions are database keys, but the
+# pattern stays a security control: ids appear in URLs, and only letters,
+# digits, underscore, hyphen are allowed - never dots or slashes that
+# could smuggle path separators or break URL routing.
 SESSION_ID_PATTERN: str = r"^[A-Za-z0-9_-]{1,64}$"
 
 # Welcome banner (f-string interpolation built at import time)
