@@ -42,3 +42,13 @@ class InvalidSessionIdError(AssistantError):
     enable path traversal (e.g. "../evil"). The API layer rejects these
     with 422; this error is the service layer's defense in depth.
     """
+
+
+class StorageError(AssistantError):
+    """Raised when a persistence operation fails.
+
+    Wraps whatever the underlying driver raised, so callers can catch
+    ONE storage exception type regardless of whether the backend is
+    SQLite, PostgreSQL, or (earlier in the project) JSON files. The
+    original exception stays attached via `raise ... from exc`.
+    """

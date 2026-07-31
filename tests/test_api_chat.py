@@ -1,8 +1,8 @@
-"""API tests for chat and history (Phase 2, Milestones 2 + 3).
+"""API tests for chat and history (Phase 2 + Phase 4).
 
 These tests exercise the REAL HTTP layer (TestClient) but override the
-ChatService dependency with one backed by a temporary directory, so
-test sessions never pollute data/.
+ChatService dependency with one backed by a temporary database, so
+test sessions never pollute the real data/ store.
 """
 
 import tempfile
@@ -12,17 +12,23 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app.api.routes import get_chat_service
+from app.db import build_engine, init_db
 from app.main import app
+from app.persistence.message_repository import MessageRepository
 from app.services.chat_service import ChatService
 
 
 class ChatApiTestCase(unittest.TestCase):
-    """Shared setup: a temp-dir-backed service injected via Depends."""
+    """Shared setup: a temp-DB-backed service injected via Depends."""
 
     @classmethod
     def setUpClass(cls) -> None:
         cls._tmpdir = tempfile.TemporaryDirectory()
-        service = ChatService(sessions_dir=Path(cls._tmpdir.name))
+        cls._engine = build_engine(
+            f"sqlite:///{(Path(cls._tmpdir.name) / 'api.db').as_posix()}"
+        )
+        init_db(cls._engine)
+        service = ChatService(repository=MessageRepository(cls._engine))
         # Dependency override: every request now receives THIS service.
         # This is why Depends() exists - swap an implementation without
         # touching route code.
@@ -32,6 +38,7 @@ class ChatApiTestCase(unittest.TestCase):
     @classmethod
     def tearDownClass(cls) -> None:
         app.dependency_overrides.clear()
+        cls._engine.dispose()
         cls._tmpdir.cleanup()
 
 

@@ -1,41 +1,40 @@
 """ChatService - orchestrates conversations across HTTP requests.
 
-Phase 2, Milestone 3: sessions are now DURABLE. Each conversation is
-lazily loaded from its file on first contact and saved after every
-turn, so a server restart loses nothing.
+Phase 2, Milestone 3 -> Phase 4, Milestone 2: storage moved from JSON
+files to the MessageRepository (relational database). The service's
+public API - process(), get_history() - is UNCHANGED, which is exactly
+the point of the repository seam.
 
 Three responsibilities:
   1. SESSIONS. A dict of Conversations, keyed by session_id.
   2. CONCURRENCY. A threading.Lock makes get-or-create + mutation
      atomic (FastAPI runs sync endpoints in a threadpool).
-  3. PERSISTENCE. Load on demand, save after every turn, via the
-     repository layer (storage). Phase 3 swaps files for a database
-     and nothing outside this class changes.
+  3. PERSISTENCE. Conversations are loaded from the repository and new
+     messages inserted after every turn (incremental, not snapshots).
 
 SECURITY: session_id is validated here AGAIN (defense in depth) even
-though the API schema already rejects bad ids - because the service is
-the layer that actually builds file paths. Never trust a single layer.
+though the API schema already rejects bad ids - never trust one layer.
 """
 
 from __future__ import annotations
 
 import re
 import threading
-from pathlib import Path
 
-from app import config, storage
+from app import config
 from app.assistant import Assistant
 from app.errors import InvalidSessionIdError
 from app.models import Conversation, Message
+from app.persistence.message_repository import MessageRepository
 
 
 class ChatService:
     """Thread-safe, persistent store of per-session conversations."""
 
-    def __init__(self, sessions_dir: Path | None = None) -> None:
-        # Injection point: tests pass a temp dir so they never touch the
-        # real data/ folder. Defaults to the repository's session dir.
-        self._sessions_dir = sessions_dir or storage.SESSION_DIR
+    def __init__(self, repository: MessageRepository | None = None) -> None:
+        # Injection point: tests build a repository over a temp database
+        # so test sessions never touch the real data/assistant.db.
+        self._repository = repository or MessageRepository()
         self._sessions: dict[str, Conversation] = {}
         # One lock guarding ALL session access. Correct and simple.
         # (Improvement for Phase 7: per-session locks, so a slow chat
@@ -61,20 +60,23 @@ class ChatService:
         self._validate_session_id(session_id)
         with self._lock:
             conversation = self._load_or_create(session_id)
+            before: int = len(conversation)
             # A fresh Assistant is cheap and stateless (name + logic);
             # respond() records both sides into the shared conversation.
             assistant = Assistant(name=config.ASSISTANT_NAME, conversation=conversation)
             reply = assistant.respond(message)
-            # Save under the lock so the on-disk snapshot can never
-            # overtake the in-memory truth.
-            storage.save_history(conversation.messages, self._path_for(session_id))
+            # Persist ONLY the messages appended by this turn
+            # (incremental insert - the relational best practice).
+            added: list[Message] = conversation.messages[before:]
+            self._repository.add_messages(session_id, added)
             return reply
 
     def get_history(self, session_id: str) -> list[Message]:
         """Return a session's messages (loading them if necessary).
 
-        Reads from memory when the session is live, otherwise from disk.
-        A GET never creates a session - unknown sessions yield [].
+        Reads from memory when the session is live, otherwise from the
+        database. A GET never creates a session - unknown sessions
+        yield [].
 
         Args:
             session_id: The conversation to inspect.
@@ -90,16 +92,16 @@ class ChatService:
             conversation = self._sessions.get(session_id)
             if conversation is not None:
                 return list(conversation.messages)
-            return list(storage.load_history(self._path_for(session_id)))
+            return list(self._repository.get_messages(session_id))
 
     # ------------------------------------------------------------------
-    # Private helpers - call while holding self._lock (except _validate)
+    # Private helpers
     # ------------------------------------------------------------------
     def _validate_session_id(self, session_id: str) -> None:
-        """Reject ids that could escape the sessions directory.
+        """Enforce the session_id whitelist (defense in depth).
 
-        This mirrors the schema validator as defense in depth. Cheap -
-        a single regex - so there is no reason to skip it.
+        Mirrors the schema validator so every entry point - HTTP or
+        programmatic - obeys the same identifier contract.
         """
         if not re.fullmatch(config.SESSION_ID_PATTERN, session_id):
             raise InvalidSessionIdError(
@@ -107,19 +109,13 @@ class ChatService:
                 f"{config.SESSION_ID_PATTERN}"
             )
 
-    def _path_for(self, session_id: str) -> Path:
-        """Storage path for a session (ids are pre-validated)."""
-        return self._sessions_dir / f"{session_id}.json"
-
     def _load_or_create(self, session_id: str) -> Conversation:
-        """Return the live conversation, loading from disk if needed.
+        """Return the live conversation, loading from the DB if needed.
 
         PRIVATE: must only be called while holding self._lock.
         """
         conversation = self._sessions.get(session_id)
         if conversation is None:
-            # load_history fails soft: a missing or corrupt file simply
-            # yields a fresh conversation (log only, never crash).
-            conversation = Conversation(storage.load_history(self._path_for(session_id)))
+            conversation = Conversation(self._repository.get_messages(session_id))
             self._sessions[session_id] = conversation
         return conversation

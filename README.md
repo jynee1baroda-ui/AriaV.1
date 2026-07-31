@@ -5,13 +5,12 @@ roadmap. See the current phase below.
 
 ## Status
 
-- **Phase 2 (Backend Development)**: Milestone 3 complete — durable
-  sessions: per-session files (`data/sessions/<id>.json`), restart
-  recovery, session_id whitelist (path-traversal defense), injected
-  service for testable temp-dir storage. 53 passing tests.
-- **Phase 2, Milestone 2**: `POST /chat` + `GET /history` with
-  thread-safe in-memory sessions.
-- **Phase 2, Milestone 1**: FastAPI skeleton + `/health` + venv.
+- **Phase 4 (Database Integration)**: Milestone 2 complete — storage
+  moved to a relational database via `MessageRepository` (SQLAlchemy).
+  Incremental inserts, `StorageError` wrapping, restart recovery via DB.
+  65 passing tests.
+- **Phase 4, Milestone 1**: SQLAlchemy infra, `sessions`/`messages`
+  schema (FK cascade, CHECK constraint, composite index), lifespan init.
 - Phase 1 (Programming Fundamentals) complete — REPL assistant with
   persistent memory, exception hierarchy, atomic file writes, git/GitHub.
 
