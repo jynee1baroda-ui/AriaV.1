@@ -15,6 +15,7 @@ from fastapi import FastAPI
 
 from app import config
 from app.api.routes import router
+from app.services.chat_service import ChatService
 
 
 def create_app() -> FastAPI:
@@ -27,6 +28,10 @@ def create_app() -> FastAPI:
         title=f"AI Assistant {config.ASSISTANT_NAME}",
         version=config.ASSISTANT_VERSION,
     )
+    # The composition root owns the service's lifecycle. Routes access
+    # it via Depends(), which keeps them testable (an override can swap
+    # a fake service in without touching route code).
+    app.state.chat_service = ChatService()
     app.include_router(router)
     return app
 
