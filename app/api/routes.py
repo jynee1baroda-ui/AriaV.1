@@ -6,11 +6,12 @@ serialize. No business logic lives here - ChatService owns that.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from app import config
 from app.schemas.chat import ChatRequest, ChatResponse, HistoryResponse, MessageSchema
+from app.security.rate_limiter import RateLimiter
 from app.services.chat_service import ChatService
 
 router = APIRouter(prefix="/api/v1")
@@ -23,6 +24,37 @@ def get_chat_service(request: Request) -> ChatService:
     calling app.dependency_overrides[get_chat_service].
     """
     return request.app.state.chat_service
+
+
+def get_rate_limiter(request: Request) -> RateLimiter:
+    """FastAPI dependency: the shared, process-wide RateLimiter."""
+    return request.app.state.rate_limiter
+
+
+def enforce_rate_limit(
+    request: Request,
+    limiter: RateLimiter = Depends(get_rate_limiter),
+) -> None:
+    """Dependency that rejects abusive clients with HTTP 429.
+
+    Applied to the WRITE path only: POST /chat is the surface that
+    costs us work (DB writes, memory consolidation). Reads, health,
+    and readiness probes are exempt so infrastructure monitoring is
+    never throttled.
+
+    Identity is the client IP until authentication exists (a later
+    phase); Retry-After tells the client when it may try again.
+    """
+    if not config.RATE_LIMIT_ENABLED:
+        return
+    key = request.client.host if request.client else "unknown"
+    allowed, retry_after = limiter.check(key)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests. Please wait and try again.",
+            headers={"Retry-After": str(retry_after)},
+        )
 
 
 @router.get("/health")
@@ -70,12 +102,14 @@ def ready(service: ChatService = Depends(get_chat_service)) -> JSONResponse:
 def chat(
     payload: ChatRequest,
     service: ChatService = Depends(get_chat_service),
+    _rate_limited: None = Depends(enforce_rate_limit),
 ) -> ChatResponse:
     """Send one message to the assistant.
 
     Args:
         payload: The validated request (session_id + message).
         service: The shared ChatService (injected).
+        _rate_limited: Dependency only - enforces the rate limit.
 
     Returns:
         The assistant's reply for that session.

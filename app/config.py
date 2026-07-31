@@ -80,3 +80,15 @@ def _default_database_url() -> str:
 # Database connection string. Read from environment (or .env) so the
 # SAME code runs against SQLite locally and PostgreSQL in production.
 DATABASE_URL: str = os.getenv("DATABASE_URL", _default_database_url())
+
+# Rate limiting (Phase 6, M1): a per-IP cap on the write path. Limits
+# are generous for a dev API; production tuning depends on auth. The
+# infrastructure probes /health and /ready are deliberately exempt.
+RATE_LIMIT_ENABLED: bool = True
+RATE_LIMIT_MAX_REQUESTS: int = 30
+RATE_LIMIT_WINDOW_SECONDS: int = 60
+
+# History pagination (Phase 6, M2): a page size cap so one request can
+# never load a session's entire unbounded history into memory.
+HISTORY_DEFAULT_LIMIT: int = 100
+HISTORY_MAX_LIMIT: int = 500

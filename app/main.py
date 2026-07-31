@@ -20,6 +20,7 @@ from fastapi.responses import JSONResponse
 from app import config, db
 from app.api.routes import router
 from app.errors import InvalidSessionIdError
+from app.security.rate_limiter import RateLimiter
 from app.services.chat_service import ChatService
 
 
@@ -54,6 +55,13 @@ def create_app() -> FastAPI:
     # it via Depends(), which keeps them testable (an override can swap
     # a fake service in without touching route code).
     app.state.chat_service = ChatService()
+
+    # The abuse guard: one limiter shared by every request. Routes
+    # enforce it via Depends(); tests can override with a tiny limit.
+    app.state.rate_limiter = RateLimiter(
+        limit=config.RATE_LIMIT_MAX_REQUESTS,
+        window_seconds=config.RATE_LIMIT_WINDOW_SECONDS,
+    )
 
     # If the service's own defense-in-depth validation fires (a bad id
     # that slipped past the schema), surface it as a clean 400 instead
