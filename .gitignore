@@ -13,6 +13,7 @@ data/
 
 # Machine learning artifacts (regenerate with: python -m app.ml.train)
 app/ml/artifacts/
+app/dl/artifacts/
 
 # IDE
 .vscode/

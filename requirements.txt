@@ -11,3 +11,6 @@ alembic==1.18.5
 # Phase 4 (Machine Learning): supervised intent classification.
 scikit-learn==1.9.0
 joblib==1.6.0
+# Phase 5 (Deep Learning): neural intent classifier (CPU build is the
+# default wheel on Windows; CUDA builds come from the PyTorch index).
+torch==2.13.0
