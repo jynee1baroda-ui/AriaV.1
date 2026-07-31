@@ -89,15 +89,23 @@ class ChatService:
             self._repository.add_messages(session_id, added)
             return reply
 
-    def get_history(self, session_id: str) -> list[Message]:
+    def get_history(
+        self,
+        session_id: str,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[Message]:
         """Return a session's messages (loading them if necessary).
 
         Reads from memory when the session is live, otherwise from the
         database. A GET never creates a session - unknown sessions
-        yield [].
+        yield []. When limit/offset are given, only that page of the
+        live conversation's messages is returned.
 
         Args:
             session_id: The conversation to inspect.
+            limit: Max messages; None returns the whole conversation.
+            offset: How many messages to skip first.
 
         Returns:
             The ordered messages so far.
@@ -109,8 +117,32 @@ class ChatService:
         with self._lock:
             conversation = self._sessions.get(session_id)
             if conversation is not None:
-                return list(conversation.messages)
-            return list(self._repository.get_messages(session_id))
+                # Live session: page the in-memory list.
+                messages = conversation.messages
+                if limit is None:
+                    return list(messages[offset:])
+                return list(messages[offset: offset + limit])
+            # Cold session: let the database do the pagination.
+            return list(self._repository.get_messages(session_id, limit=limit, offset=offset))
+
+    def count_history(self, session_id: str) -> int:
+        """Return the total number of stored messages in a session.
+
+        Used to build the pagination metadata (`total`) independently
+        of the current page. The count comes from the database, so it
+        is accurate even for sessions never loaded into memory.
+
+        Args:
+            session_id: The conversation to count.
+
+        Returns:
+            The message count.
+
+        Raises:
+            InvalidSessionIdError: If session_id fails the whitelist.
+        """
+        self._validate_session_id(session_id)
+        return self._repository.count_messages(session_id)
 
     def ping(self) -> bool:
         """Report whether the persistence backend is reachable.

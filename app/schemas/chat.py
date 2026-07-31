@@ -53,9 +53,10 @@ class ChatRequest(BaseModel):
     def validate_session_id(cls, value: str) -> str:
         """Enforce the session_id whitelist.
 
-        Session ids become file names in M3, so this is a security
-        control: rejecting dots and slashes stops path traversal. The
-        max_length=64 Field plus this regex keep ids bounded and safe.
+        Session ids become database keys and URL path segments, so this
+        is a security control: rejecting dots and slashes stops path
+        traversal and URL-routing tricks. The max_length=64 Field plus
+        this regex keep ids bounded and safe.
         """
         value = value.strip()
         if not re.fullmatch(config.SESSION_ID_PATTERN, value):
@@ -96,10 +97,19 @@ class MessageSchema(BaseModel):
 class HistoryResponse(BaseModel):
     """Body of GET /api/v1/history/{session_id}.
 
+    Self-describing page: `total` is the full conversation size, so a
+    client can page through with limit/offset without guessing.
+
     Attributes:
         session_id: Which session this history belongs to.
-        messages: The full ordered conversation so far.
+        messages: One page of the ordered conversation.
+        total: The total number of messages in the session.
+        limit: The page size that was applied.
+        offset: The number of messages skipped for this page.
     """
 
     session_id: str
     messages: list[MessageSchema]
+    total: int
+    limit: int
+    offset: int

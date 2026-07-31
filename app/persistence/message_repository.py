@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
 from app import db
@@ -67,11 +67,23 @@ class MessageRepository:
             logger.exception("Database connectivity check failed")
             return False
 
-    def get_messages(self, session_id: str) -> list[Message]:
-        """Load a session's messages in order.
+    def get_messages(
+        self,
+        session_id: str,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[Message]:
+        """Load a session's messages in insertion order.
+
+        Optional pagination: `limit` caps the page size and `offset`
+        skips rows. With no limit, the whole conversation is returned
+        (used internally and by the CLI). The (session_id, id) index
+        makes the ordered lookup a scan of that index, not a sort.
 
         Args:
             session_id: The session to read.
+            limit: Max rows to return; None means all.
+            offset: Rows to skip first (for page 2+).
 
         Returns:
             Domain Message objects in insertion order. Empty list for
@@ -82,15 +94,46 @@ class MessageRepository:
         """
         try:
             with Session(self._engine) as session:
-                rows = session.scalars(
+                stmt = (
                     select(MessageModel)
                     .where(MessageModel.session_id == session_id)
                     .order_by(MessageModel.id)
-                ).all()
+                )
+                if limit is not None:
+                    stmt = stmt.limit(limit)
+                if offset:
+                    stmt = stmt.offset(offset)
+                rows = session.scalars(stmt).all()
                 return [Message(role=row.role, content=row.content) for row in rows]
         except Exception as exc:
             logger.exception("Failed to load messages for session %r", session_id)
             raise StorageError(f"Failed to load messages for session {session_id!r}") from exc
+
+    def count_messages(self, session_id: str) -> int:
+        """Count a session's messages (for pagination's `total`).
+
+        Args:
+            session_id: The session to count.
+
+        Returns:
+            The number of stored messages.
+
+        Raises:
+            StorageError: If the query fails.
+        """
+        try:
+            with Session(self._engine) as session:
+                return int(
+                    session.scalar(
+                        select(func.count(MessageModel.id)).where(
+                            MessageModel.session_id == session_id
+                        )
+                    )
+                    or 0
+                )
+        except Exception as exc:
+            logger.exception("Failed to count messages for session %r", session_id)
+            raise StorageError(f"Failed to count messages for session {session_id!r}") from exc
 
     def add_messages(self, session_id: str, messages: list[Message]) -> None:
         """Append messages to a session, creating the session if needed.

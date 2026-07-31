@@ -48,6 +48,43 @@ class TestGetMessages(RepositoryTestCase):
         self.assertEqual(messages[1].role, "assistant")
 
 
+class TestGetMessagesPagination(RepositoryTestCase):
+    """limit/offset must page without changing order or missing rows."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.repository.add_messages(
+            "paged",
+            [
+                Message("user", f"m{i}")
+                for i in range(5)
+            ],
+        )
+
+    def test_pages_in_order(self) -> None:
+        first = self.repository.get_messages("paged", limit=2, offset=0)
+        self.assertEqual([m.content for m in first], ["m0", "m1"])
+
+        second = self.repository.get_messages("paged", limit=2, offset=2)
+        self.assertEqual([m.content for m in second], ["m2", "m3"])
+
+    def test_last_page_is_shorter(self) -> None:
+        last = self.repository.get_messages("paged", limit=2, offset=4)
+        self.assertEqual([m.content for m in last], ["m4"])
+
+    def test_offset_beyond_end_returns_empty(self) -> None:
+        self.assertEqual(self.repository.get_messages("paged", limit=2, offset=99), [])
+
+    def test_no_limit_returns_everything(self) -> None:
+        self.assertEqual(len(self.repository.get_messages("paged")), 5)
+
+    def test_count_messages(self) -> None:
+        self.assertEqual(self.repository.count_messages("paged"), 5)
+
+    def test_count_unknown_session_is_zero(self) -> None:
+        self.assertEqual(self.repository.count_messages("ghost"), 0)
+
+
 class TestAddMessages(RepositoryTestCase):
     """Writing must upsert the session and insert rows."""
 

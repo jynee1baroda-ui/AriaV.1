@@ -5,26 +5,18 @@ roadmap. See the current phase below.
 
 ## Status
 
-- **Phase 5 (Memory System)**: Milestone 2 complete — memory is now
-  *meaningful*: `MemoryExtractor` distills statements ("my name is
-  Alice", "i like coffee", "remember that X") into canonical facts;
-  `MemoryService.consolidate()` dedups and stores them; `retrieve()`
-  pulls relevant facts so the Assistant answers questions across
-  sessions ("what is my name" → "Your name is Alice."). Rule-based
-  until the LLM (Phase 7) and RAG (Phase 8) arrive. CLI gained
-  `/remember` and `/memory`. 123 passing tests.
-- **Phase 5, Milestone 1**: long-term memory STORAGE layer —
-  `memories` table via Alembic, `MemoryRepository`. Ownership design:
-  memories belong to the ASSISTANT (FK `ON DELETE SET NULL`), so
-  deleting a session keeps the facts it taught.
-- **Phase 4 (Database Integration)**: complete. Schema is versioned and
-  reversible with Alembic — the app runs `alembic upgrade head` on
-  startup; migrations in `alembic/versions/`, recorded in
-  `alembic_version`.
-  - M4: Alembic migrations (upgrade/downgrade tested).
-  - M3: `/api/v1/ready` readiness probe; dead file-session code removed.
-  - M2: storage moved to `MessageRepository`; incremental inserts.
-  - M1: SQLAlchemy infra, `sessions`/`messages` schema, lifespan init.
+- **Phase 6 (API Hardening)**: Milestone 2 complete — history is
+  paginated (`GET /history/{id}?limit=&offset=` with a 500-row cap and
+  self-describing `total`/`limit`/`offset`), so one request can never
+  load a session's unbounded history. Milestone 1 added rate limiting:
+  a fixed-window per-IP cap on `POST /chat` returning 429 + Retry-After
+  (health/ready probes exempt). 140 passing tests.
+- **Phase 5 (Memory System)**: complete — consolidation + retrieval of
+  long-term memory: `MemoryExtractor` distills statements, dedup stores
+  them, and the Assistant answers across sessions (rule-based until LLM
+  in Phase 7 / RAG in Phase 8). CLI has `/remember` and `/memory`.
+- **Phase 4 (Database Integration)**: complete. Schema versioned and
+  reversible with Alembic; app runs `alembic upgrade head` on startup.
 - Phase 1 (Programming Fundamentals) complete — REPL assistant with
   persistent memory, exception hierarchy, atomic file writes, git/GitHub.
 
@@ -58,11 +50,15 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/v1/chat `
   -Body '{"session_id":"demo","message":"hello"}'
 ```
 
-Read that session's history:
+Read a page of that session's history (Phase 6: paginated):
 
 ```powershell
-Invoke-RestMethod -Uri http://127.0.0.1:8000/api/v1/history/demo
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/v1/history/demo?limit=50&offset=0"
 ```
+
+The response includes `total`, `limit`, and `offset` so clients can
+page through long conversations. Sending more than 30 chat messages per
+minute from one IP returns `429` with a `Retry-After` header.
 
 ## Database migrations (Alembic)
 

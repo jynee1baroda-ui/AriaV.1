@@ -110,5 +110,36 @@ class TestMemoryAcrossSessions(TempDbTestCase):
         self.assertEqual(count, 1)
 
 
+class TestHistoryPagination(TempDbTestCase):
+    """Phase 6 M2: get_history pages and counts correctly."""
+
+    def test_pages_live_session(self) -> None:
+        service = self.make_service()
+        for i in range(3):
+            service.process("paged", f"hello {i}")
+
+        page = service.get_history("paged", limit=2, offset=0)
+        self.assertEqual(
+            [m.content for m in page],
+            ["hello 0", "Hello! I'm Aria. How can I help?"],
+        )
+        self.assertEqual(service.count_history("paged"), 6)
+
+    def test_pages_cold_session_after_restart(self) -> None:
+        service_one = self.make_service()
+        for i in range(3):
+            service_one.process("paged", f"hello {i}")
+
+        service_two = self.make_service()
+        page = service_two.get_history("paged", limit=4, offset=4)
+        # Last 2 of 6 messages; the reply to "hello 2" is the greeting.
+        self.assertEqual(
+            [m.content for m in page],
+            ["hello 2", "Hello! I'm Aria. How can I help?"],
+        )
+        self.assertEqual(service_two.count_history("paged"), 6)
+
+
+
 if __name__ == "__main__":
     unittest.main()

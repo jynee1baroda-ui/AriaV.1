@@ -140,6 +140,34 @@ class TestHistoryEndpoint(ChatApiTestCase):
         self.assertEqual(response.json()["messages"], [])
 
 
+class TestHistoryPaginationApi(ChatApiTestCase):
+    """Phase 6 M2: the HTTP layer must page and validate."""
+
+    def test_pagination_metadata_and_pages(self) -> None:
+        for i in range(3):
+            self.client.post("/api/v1/chat", json={"session_id": "pg", "message": f"hi {i}"})
+
+        first = self.client.get("/api/v1/history/pg", params={"limit": 2, "offset": 0})
+        self.assertEqual(first.status_code, 200)
+        body = first.json()
+        self.assertEqual(len(body["messages"]), 2)
+        self.assertEqual(body["total"], 6)
+        self.assertEqual(body["limit"], 2)
+        self.assertEqual(body["offset"], 0)
+        self.assertEqual(body["messages"][0]["content"], "hi 0")
+
+        second = self.client.get("/api/v1/history/pg", params={"limit": 2, "offset": 2})
+        self.assertEqual(second.json()["messages"][0]["content"], "hi 1")
+
+    def test_limit_above_cap_is_422(self) -> None:
+        response = self.client.get("/api/v1/history/pg", params={"limit": 501})
+        self.assertEqual(response.status_code, 422)
+
+    def test_negative_offset_is_422(self) -> None:
+        response = self.client.get("/api/v1/history/pg", params={"offset": -1})
+        self.assertEqual(response.status_code, 422)
+
+
 class TestSessionIsolation(ChatApiTestCase):
     """Sessions must never leak into each other."""
 

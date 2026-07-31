@@ -6,7 +6,7 @@ serialize. No business logic lives here - ChatService owns that.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
 from app import config
@@ -122,18 +122,40 @@ def chat(
 def history(
     session_id: str,
     service: ChatService = Depends(get_chat_service),
+    limit: int = Query(
+        default=config.HISTORY_DEFAULT_LIMIT,
+        ge=1,
+        le=config.HISTORY_MAX_LIMIT,
+        description="Page size (1-500).",
+    ),
+    offset: int = Query(
+        default=0,
+        ge=0,
+        description="Messages to skip, for page 2+.",
+    ),
 ) -> HistoryResponse:
-    """Fetch the full conversation for a session.
+    """Fetch a page of the conversation for a session.
+
+    Pagination bounds every response: a session can hold thousands of
+    messages, and returning them all in one payload would grow without
+    limit. The `total` field tells clients the full size so they can
+    page through with offset.
 
     Args:
         session_id: The conversation to read.
         service: The shared ChatService (injected).
+        limit: Max messages on this page (capped by the schema).
+        offset: How many messages to skip first.
 
     Returns:
-        The ordered messages, or an empty list for an unknown session.
+        One page of messages, with pagination metadata.
     """
-    messages = service.get_history(session_id)
+    messages = service.get_history(session_id, limit=limit, offset=offset)
+    total = service.count_history(session_id)
     return HistoryResponse(
         session_id=session_id,
         messages=[MessageSchema(role=m.role, content=m.content) for m in messages],
+        total=total,
+        limit=limit,
+        offset=offset,
     )
