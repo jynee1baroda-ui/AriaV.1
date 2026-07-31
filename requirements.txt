@@ -1,2 +1,5 @@
-# Standard library only for now. AI packages (FastAPI, transformers, etc.)
-# are added in later phases.
+# Phase 1: standard library only.
+# Phase 2 (M1): web server dependencies, pinned to verified versions.
+fastapi==0.141.1
+uvicorn[standard]==0.52.0
+httpx==0.28.1
