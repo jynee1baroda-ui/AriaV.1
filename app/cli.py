@@ -42,6 +42,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger("assistant")
 
+# huggingface_hub CLOBBERS its own log level when it is imported (lazily,
+# on the first LLM load), so calling setLevel here is pointless - it gets
+# overwritten. Its supported knob is the HF_HUB_VERBOSITY env var, read at
+# import time. 'error' silences the "unauthenticated requests" warning the
+# HF server sends as an HTTP response header on every download.
+os.environ.setdefault("HF_HUB_VERBOSITY", "error")
+
+# httpx logs every HTTP request the LLM download makes at INFO; raise
+# only its level so the app's own logs stay INFO.
+for _noisy_logger in ("httpx", "httpcore"):
+    logging.getLogger(_noisy_logger).setLevel(logging.WARNING)
+
 
 def main() -> NoReturn:
     """Composition root: build the object graph, then run, then save."""

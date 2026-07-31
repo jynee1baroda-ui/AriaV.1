@@ -11,6 +11,8 @@ add dependency injection in M2, the factory is where overrides plug in.
 
 from __future__ import annotations
 
+import logging
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -24,6 +26,18 @@ from app.llm.generator import LLMGenerator
 from app.security.rate_limiter import RateLimiter
 from app.services.chat_service import ChatService
 from app.services.intent_router import IntentRouter
+
+# huggingface_hub overrides its own log level at import time (lazily,
+# on the first LLM load), so the supported knob is HF_HUB_VERBOSITY, read
+# at its import. 'error' silences the "unauthenticated requests" warning
+# the HF server sends as an HTTP response header on every download.
+os.environ.setdefault("HF_HUB_VERBOSITY", "error")
+
+# httpx logs every LLM-download HTTP request at INFO; raise only its
+# level so uvicorn's console stays clean - the app's own logs are
+# unaffected.
+for _noisy_logger in ("httpx", "httpcore"):
+    logging.getLogger(_noisy_logger).setLevel(logging.WARNING)
 
 
 def create_app() -> FastAPI:
