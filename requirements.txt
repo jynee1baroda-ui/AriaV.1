@@ -6,5 +6,8 @@ httpx==0.28.1
 # Phase 4 (M1): database access + env-file configuration.
 sqlalchemy==2.0.51
 python-dotenv==1.1.0
-# Phase 4 (M4): versioned, reversible schema migrations.
+# Phase 3 (Databases): versioned, reversible schema migrations.
 alembic==1.18.5
+# Phase 4 (Machine Learning): supervised intent classification.
+scikit-learn==1.9.0
+joblib==1.6.0

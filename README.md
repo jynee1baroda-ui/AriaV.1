@@ -5,19 +5,26 @@ roadmap. See the current phase below.
 
 ## Status
 
-- **Phase 6 (API Hardening)**: Milestone 2 complete — history is
-  paginated (`GET /history/{id}?limit=&offset=` with a 500-row cap and
-  self-describing `total`/`limit`/`offset`), so one request can never
-  load a session's unbounded history. Milestone 1 added rate limiting:
-  a fixed-window per-IP cap on `POST /chat` returning 429 + Retry-After
-  (health/ready probes exempt). 140 passing tests.
-- **Phase 5 (Memory System)**: complete — consolidation + retrieval of
+- **Phase 4 (Machine Learning)**: in progress — building a supervised
+  intent classifier (TF-IDF + logistic regression) as the ML module
+  (`app/ml/`); integration into the Assistant's reply routing is the
+  following milestone. Latest phase-by-phase status lives in
+  [ROADMAP.md](ROADMAP.md).
+- **Engineering hardening**: rate limiting on `POST /chat` (fixed-window
+  per-IP, 429 + Retry-After, probes exempt) and pagination on
+  `GET /history` (`limit` 1–500, `offset` ≥ 0, self-describing
+  `total`/`limit`/`offset`). 140 passing tests.
+- **Phase 10 (Memory System) preview**: consolidation + retrieval of
   long-term memory: `MemoryExtractor` distills statements, dedup stores
-  them, and the Assistant answers across sessions (rule-based until LLM
-  in Phase 7 / RAG in Phase 8). CLI has `/remember` and `/memory`.
-- **Phase 4 (Database Integration)**: complete. Schema versioned and
-  reversible with Alembic; app runs `alembic upgrade head` on startup.
-- Phase 1 (Programming Fundamentals) complete — REPL assistant with
+  them, and the Assistant answers across sessions (rule-based until RAG
+  in Phase 9 / full memory in Phase 10). CLI has `/remember` and
+  `/memory`.
+- **Phase 3 (Databases)**: complete. Schema versioned and reversible
+  with Alembic; app runs `alembic upgrade head` on startup.
+- **Phase 2 (Backend Development)**: complete — FastAPI app, routes /
+  schemas / services layering, dependency injection, thread-safe
+  chat service.
+- **Phase 1 (Programming Fundamentals)**: complete — REPL assistant with
   persistent memory, exception hierarchy, atomic file writes, git/GitHub.
 
 ## Requirements
@@ -50,7 +57,7 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/v1/chat `
   -Body '{"session_id":"demo","message":"hello"}'
 ```
 
-Read a page of that session's history (Phase 6: paginated):
+Read a page of that session's history (pagination hardening):
 
 ```powershell
 Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/v1/history/demo?limit=50&offset=0"
@@ -108,5 +115,5 @@ You> /exit
 ```
 
 Conversations are saved to `data/history.json` and reloaded on the next
-start — the seed of long-term memory. The web server will grow
-per-session persistence in Phase 2, Milestone 3.
+start — the seed of long-term memory. The web server grew per-session
+persistence in Phase 3 (Databases).

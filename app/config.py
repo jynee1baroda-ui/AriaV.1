@@ -36,7 +36,7 @@ ASSISTANT_VERSION: str = "0.1.0"
 ASSISTANT_INFO: dict[str, str] = {
     "name": ASSISTANT_NAME,
     "version": ASSISTANT_VERSION,
-    "phase": "Phase 5 - Memory System",
+    "phase": "Phase 4 - Machine Learning",
     "creator": "You",
 }
 

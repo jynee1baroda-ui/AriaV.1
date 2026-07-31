@@ -11,6 +11,9 @@ venv/
 # Runtime user data
 data/
 
+# Machine learning artifacts (regenerate with: python -m app.ml.train)
+app/ml/artifacts/
+
 # IDE
 .vscode/
 .idea/
