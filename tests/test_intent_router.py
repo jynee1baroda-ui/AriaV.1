@@ -11,7 +11,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.ml.dataset import Intent
+from app.dl.neural_classifier import NeuralIntentClassifier
+from app.ml.dataset import INTENT_EXAMPLES, Intent
 from app.services.intent_router import IntentRouter
 
 
@@ -79,6 +80,37 @@ class TestIntentRouterGracefulDegradation(unittest.TestCase):
     def test_disabled_router_without_classifier_is_safe(self):
         router = IntentRouter(enabled=False)
         self.assertIsNone(router.route("hello"))
+
+
+class TestIntentRouterModelSelection(unittest.TestCase):
+    """Phase 5 M2: both model backends plug into the same router."""
+
+    def test_injected_neural_classifier_is_used(self):
+        """A supplied NeuralIntentClassifier drives the router exactly
+        like the linear one - the duck-typed API is the whole point of
+        the interface parity. threshold=0 removes confidence gating so
+        the test proves the router consults the model at all (a 5-epoch
+        net is rarely >50% confident on real messages)."""
+        neural = NeuralIntentClassifier.train(INTENT_EXAMPLES, epochs=5)
+        router = IntentRouter(classifier=neural, kind="neural", threshold=0.0)
+        intent, _ = neural.predict("hello")
+        self.assertEqual(router.route("hello"), intent)
+
+    def test_neural_kind_defaults_to_neural_artifact(self):
+        router = IntentRouter(kind="neural", enabled=False)
+        self.assertIsNone(router.route("hello"))
+
+    def test_missing_neural_artifact_degrades_gracefully(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "no_neural.pt"
+            router = IntentRouter(kind="neural", artifact_path=missing)
+            self.assertIsNone(router.route("hello"))
+
+    def test_unknown_kind_fails_fast(self):
+        """A typo in config must explode at construction, not silently
+        fall back at the first chat."""
+        with self.assertRaises(ValueError):
+            IntentRouter(kind="transformer")
 
 
 if __name__ == "__main__":

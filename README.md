@@ -5,9 +5,18 @@ roadmap. See the current phase below.
 
 ## Status
 
+- **Phase 5 (Deep Learning)**: complete — a PyTorch neural intent
+  classifier (`app/dl/`): the same TF-IDF features through a
+  hidden-layer MLP trained with a real backprop loop, early stopping,
+  and a controlled head-to-head against the Phase 4 baseline. Honest
+  result: **71.1% vs 71.1% tie** — with 149 examples depth buys
+  memorization (train acc → 100%) but not generalization, which is why
+  the simpler logistic regression stays the router's default
+  (`INTENT_MODEL_KIND="linear"`) and the neural model is one config
+  flip away (`"neural"`). This is the on-ramp to Phase 6.
 - **Phase 4 (Machine Learning)**: complete — a supervised intent
   classifier (`app/ml/`): TF-IDF + logistic regression trained on 149
-  labeled examples, honest held-out evaluation (~70% accuracy; the
+  labeled examples, honest held-out evaluation (~71% accuracy; the
   honest tradeoff vs. the Phase 7 LLM), and a persisted artifact
   (`python -m app.ml.train` regenerates it). The Assistant now routes
   through `IntentRouter` — ML steers the reply branch only when

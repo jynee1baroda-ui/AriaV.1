@@ -26,6 +26,11 @@ Why advisory instead of "ML everywhere"? Three honest reasons:
 
 Graceful degradation is a feature, not a fallback: every failure mode
 below resolves to "let the rules decide" and logs a single warning.
+
+Phase 5, M2: the router can load either model backend - the Phase 4
+logistic regression ("linear", the default) or the Phase 5 PyTorch
+MLP ("neural") - selected by config.INTENT_MODEL_KIND. They share the
+same predict API, so the gating logic below is backend-agnostic.
 """
 
 from __future__ import annotations
@@ -35,19 +40,27 @@ import threading
 from pathlib import Path
 
 from app import config
+from app.dl.neural_classifier import DEFAULT_ARTIFACT_PATH as NEURAL_ARTIFACT_PATH
+from app.dl.neural_classifier import NeuralIntentClassifier
 from app.ml.dataset import Intent
 from app.ml.intent_classifier import IntentClassifier, DEFAULT_ARTIFACT_PATH
 
 logger = logging.getLogger("assistant.ml")
+
+# Allowed model backends. "linear" = Phase 4 logistic regression;
+# "neural" = Phase 5 PyTorch MLP. Both expose the same predict API, so
+# the router treats them identically (duck typing).
+_SUPPORTED_KINDS: frozenset[str] = frozenset({"linear", "neural"})
 
 
 class IntentRouter:
     """Gate the classifier behind a confidence threshold.
 
     Attributes:
-        _classifier: The trained model, or None while unloaded.
+        _classifier: The trained model (linear or neural), or None.
         _threshold:  Minimum confidence to act (default 0.5).
         _enabled:    Master switch (config.INTENT_CLASSIFIER_ENABLED).
+        _kind:       Which model backend to load ("linear" | "neural").
         _artifact_path: Where to load the model from.
         _load_lock:  Guards lazy loading across threads (FastAPI runs
             handlers in a threadpool, so the first chat can race).
@@ -55,15 +68,26 @@ class IntentRouter:
 
     def __init__(
         self,
-        classifier: IntentClassifier | None = None,
+        classifier: IntentClassifier | NeuralIntentClassifier | None = None,
         threshold: float = config.INTENT_CONFIDENCE_THRESHOLD,
         enabled: bool = config.INTENT_CLASSIFIER_ENABLED,
-        artifact_path: Path = DEFAULT_ARTIFACT_PATH,
+        kind: str = config.INTENT_MODEL_KIND,
+        artifact_path: Path | None = None,
     ) -> None:
+        if kind not in _SUPPORTED_KINDS:
+            raise ValueError(
+                f"unknown INTENT_MODEL_KIND {kind!r}; expected one of {sorted(_SUPPORTED_KINDS)}"
+            )
         self._classifier = classifier
         self._threshold = threshold
         self._enabled = enabled
-        self._artifact_path = artifact_path
+        self._kind = kind
+        # The artifact default depends on the backend: the two models
+        # persist in different formats (joblib vs torch) at different
+        # paths. An explicit artifact_path overrides for tests.
+        self._artifact_path = artifact_path or (
+            DEFAULT_ARTIFACT_PATH if kind == "linear" else NEURAL_ARTIFACT_PATH
+        )
         self._load_lock = threading.Lock()
 
     def route(self, text: str) -> Intent | None:
@@ -114,7 +138,12 @@ class IntentRouter:
             if self._classifier is not None:
                 return self._classifier
             try:
-                return IntentClassifier.load(self._artifact_path)
+                loader = (
+                    NeuralIntentClassifier.load
+                    if self._kind == "neural"
+                    else IntentClassifier.load
+                )
+                return loader(self._artifact_path)
             except Exception:
                 logger.exception("ML router: model failed to load - running on rules only.")
                 self._enabled = False

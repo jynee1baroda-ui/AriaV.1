@@ -11,7 +11,7 @@ completed phase leaves a working project behind.
 | 2 | Backend development | ✅ complete |
 | 3 | Databases | ✅ complete |
 | 4 | Machine Learning | ✅ complete |
-| 5 | Deep Learning | ⬜ |
+| 5 | Deep Learning | ✅ complete |
 | 6 | Transformers | ⬜ |
 | 7 | Large Language Models | ⬜ |
 | 8 | Prompt Engineering | ⬜ |
