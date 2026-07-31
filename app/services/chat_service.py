@@ -94,6 +94,17 @@ class ChatService:
                 return list(conversation.messages)
             return list(self._repository.get_messages(session_id))
 
+    def ping(self) -> bool:
+        """Report whether the persistence backend is reachable.
+
+        Delegates to the repository; the service layer exposes it so
+        routes never talk to the repository directly (single seam).
+
+        Returns:
+            True if the database is responsive.
+        """
+        return self._repository.ping()
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------

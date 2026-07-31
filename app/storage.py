@@ -33,29 +33,6 @@ DEFAULT_HISTORY_FILE: Path = (
     Path(__file__).resolve().parent.parent / "data" / "history.json"
 )
 
-# Per-session files for the web server (M3): data/sessions/<id>.json
-SESSION_DIR: Path = (
-    Path(__file__).resolve().parent.parent / "data" / "sessions"
-)
-
-
-def session_path(session_id: str) -> Path:
-    """Build the storage path for one session.
-
-    NOTE: this function is intentionally DUMB - it does no validation.
-    Callers (ChatService) must ensure session_id already matches the
-    whitelist before this is reached, so the id can never escape the
-    sessions directory. Single responsibility: storage builds paths,
-    services enforce safety.
-
-    Args:
-        session_id: A whitelisted session identifier.
-
-    Returns:
-        data/sessions/<session_id>.json
-    """
-    return SESSION_DIR / f"{session_id}.json"
-
 
 class AtomicFileWriter:
     """Context manager that commits a file atomically.

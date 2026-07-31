@@ -5,10 +5,12 @@ roadmap. See the current phase below.
 
 ## Status
 
-- **Phase 4 (Database Integration)**: Milestone 2 complete — storage
-  moved to a relational database via `MessageRepository` (SQLAlchemy).
-  Incremental inserts, `StorageError` wrapping, restart recovery via DB.
-  65 passing tests.
+- **Phase 4 (Database Integration)**: Milestone 3 complete — web path is
+  100% database-backed; `/api/v1/ready` readiness probe with real DB
+  check (liveness vs readiness distinction); dead file-session code
+  removed. 69 passing tests.
+- **Phase 4, Milestone 2**: storage moved to `MessageRepository`
+  (SQLAlchemy); incremental inserts; `StorageError` wrapping.
 - **Phase 4, Milestone 1**: SQLAlchemy infra, `sessions`/`messages`
   schema (FK cascade, CHECK constraint, composite index), lifespan init.
 - Phase 1 (Programming Fundamentals) complete — REPL assistant with

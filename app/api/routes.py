@@ -7,6 +7,7 @@ serialize. No business logic lives here - ChatService owns that.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import JSONResponse
 
 from app import config
 from app.schemas.chat import ChatRequest, ChatResponse, HistoryResponse, MessageSchema
@@ -28,8 +29,9 @@ def get_chat_service(request: Request) -> ChatService:
 def health() -> dict[str, str]:
     """Liveness probe.
 
-    Load balancers and orchestrators (and you, for testing) hit this
-    to confirm the service is up and learn which assistant it is.
+    Answers "is the process alive?" - it should succeed even if the
+    database is down, so an orchestrator knows whether to restart us.
+    Load balancers and orchestrators (and you, for testing) hit this.
 
     Returns:
         A small JSON identity card.
@@ -39,6 +41,29 @@ def health() -> dict[str, str]:
         "assistant": config.ASSISTANT_NAME,
         "version": config.ASSISTANT_VERSION,
     }
+
+
+@router.get("/ready")
+def ready(service: ChatService = Depends(get_chat_service)) -> JSONResponse:
+    """Readiness probe.
+
+    Answers "can this process actually do its job?" - which, for a
+    chat service, means the database is reachable. Kubernetes sends
+    traffic only to ready pods; a broken DB returns 503 and the pod
+    is taken out of rotation.
+
+    Args:
+        service: The shared ChatService (injected).
+
+    Returns:
+        200 with database status, or 503 when the DB is unreachable.
+    """
+    if service.ping():
+        return JSONResponse(content={"status": "ready", "database": "ok"})
+    return JSONResponse(
+        status_code=503,
+        content={"status": "not_ready", "database": "unavailable"},
+    )
 
 
 @router.post("/chat", response_model=ChatResponse)

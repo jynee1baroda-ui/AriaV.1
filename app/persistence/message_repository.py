@@ -39,6 +39,24 @@ class MessageRepository:
     def __init__(self, engine: Engine | None = None) -> None:
         self._engine: Engine = engine or db.engine
 
+    def ping(self) -> bool:
+        """Verify the database is reachable and responsive.
+
+        Runs the cheapest possible query (SELECT 1). Used by the
+        readiness endpoint to distinguish "process is alive" (liveness)
+        from "process can actually do its job" (readiness).
+
+        Returns:
+            True if the database answered, False otherwise.
+        """
+        try:
+            with Session(self._engine) as session:
+                session.execute(select(1))
+            return True
+        except Exception:
+            logger.exception("Database connectivity check failed")
+            return False
+
     def get_messages(self, session_id: str) -> list[Message]:
         """Load a session's messages in order.
 
