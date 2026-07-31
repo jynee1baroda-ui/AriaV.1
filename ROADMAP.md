@@ -17,7 +17,7 @@ completed phase leaves a working project behind.
 | 8 | Prompt Engineering | ✅ complete |
 | 9 | RAG | ⬜ |
 | 10 | Memory Systems | 🔶 foundation built (preview) |
-| 11 | Tool Calling | ⬜ |
+| 11 | Tool Calling | 🔶 foundation built (preview) |
 | 12 | Agents | ⬜ |
 | 13 | Vision | ⬜ |
 | 14 | Voice | ⬜ |
@@ -65,6 +65,20 @@ completed phase leaves a working project behind.
   math) ALWAYS hit the KB first, so exact-fact correctness is
   preserved while the LLM carries everything else (and can be wrong;
   that tradeoff is acknowledged).
+- **Phase 11 (Tool Calling) foundation** built ahead of schedule
+  (preview, like Phase 10): Aria now performs real ACTIONS through
+  deterministic tools (`app/tools/`) that run BEFORE the LLM:
+  `clock` (real time), `calendar` (real date/weekday), `calculator`
+  (arithmetic via a restricted AST evaluator — never eval, honestly
+  refuses division by zero), and `notes` (per-session notes/reminders
+  persisted in a `notes` table + Alembic migration + `NoteRepository`,
+  exposed as natural language AND `/notes`, `/note <text>`,
+  `/delete-note <id>`). Because a 135M model cannot emit reliable
+  tool-call JSON, tools are OPTED IN by high-precision triggers (exact
+  phrase sets + tight regexes) — no match, no action, and the message
+  falls through to the LLM. Tools compute/store, so they answer even in
+  `FACTUAL_ONLY` mode. The full phase (LLM-driven tool selection,
+  argument schemas, more tools) arrives in place.
 - **Phase 10 (Memory Systems)** is the only phase with work done ahead
   of schedule: `memories` table, `MemoryRepository`, `MemoryService`
   (consolidation + retrieval). It is the storage foundation that RAG

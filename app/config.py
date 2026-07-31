@@ -148,3 +148,9 @@ SYSTEM_PROMPT_PATH = PROJECT_ROOT / "app" / "prompts" / "aria_system.md"
 FACTUAL_ONLY: bool = False
 # Consult the verified knowledge base (app/kb) for factual answers.
 KNOWLEDGE_ENABLED: bool = True
+
+# Phase 11 foundation (tool calling preview): deterministic tools
+# (clock, calendar, calculator, notes) answer BEFORE the LLM. Tools
+# compute or store - they never guess - so they answer in factual mode
+# too. Flip off to return to pure conversational answering.
+TOOLS_ENABLED: bool = True

@@ -53,6 +53,28 @@ class Memory:
 
 
 @dataclass
+class Note:
+    """One user note/reminder saved through the notes tool.
+
+    Phase 11 foundation (tool calling preview). A note is an ACTION the
+    user asked for ("remind me to buy milk"), persisted so it survives
+    restarts. Like Memory, session_id is provenance: the note belongs
+    to the session that created it.
+
+    Attributes:
+        id: Database-assigned row id (used to delete a note).
+        content: The note text ("buy milk").
+        session_id: Which session owns this note (None = global).
+        created_at: When it was stored (timezone-aware).
+    """
+
+    id: int
+    content: str
+    session_id: str | None = None
+    created_at: datetime | None = None
+
+
+@dataclass
 class Message:
     """One utterance in the conversation.
 

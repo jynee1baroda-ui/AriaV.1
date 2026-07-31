@@ -127,3 +127,37 @@ class MemoryModel(Base):
 
     def __repr__(self) -> str:
         return f"<MemoryModel id={self.id} category={self.category!r}>"
+
+
+class NoteModel(Base):
+    """One user note/reminder stored by the notes tool.
+
+    Phase 11 foundation (tool calling preview). Notes mirror memories in
+    ownership: they belong to the ASSISTANT (ON DELETE SET NULL), not
+    the session - deleting a session keeps its notes but drops the
+    provenance link. The (session_id, id) index serves "all notes for a
+    session in order" without a sort.
+    """
+
+    __tablename__ = "notes"
+    __table_args__ = (
+        Index("ix_notes_session_id_id", "session_id", "id"),
+        Index("ix_notes_created_at", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+    # Same dependency-ordering relationship as MemoryModel: without it
+    # the unit of work does not know to INSERT the parent session row
+    # before this note row, and the FK flush fails.
+    session: Mapped["SessionModel | None"] = relationship()
+
+    def __repr__(self) -> str:
+        return f"<NoteModel id={self.id}>"

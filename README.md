@@ -47,6 +47,23 @@ roadmap. See the current phase below.
   `LLM_TEMPERATURE` (0 = greedy/deterministic), `LLM_LOCAL_FILES_ONLY`,
   `LLM_CONTEXT_TURNS`, `SYSTEM_PROMPT_PATH`, `FACTUAL_ONLY`,
   `KNOWLEDGE_ENABLED` in `app/config.py`.
+- **Phase 11 (Tool Calling) foundation**: Aria performs real ACTIONS,
+  not just conversation. Deterministic tools (`app/tools/`) run right
+  after the verified KB and BEFORE the LLM:
+  - `clock` — "what time is it" → real local time.
+  - `calendar` — "what is the date" → real date + weekday.
+  - `calculator` — "what is 5*3" → computed via a restricted AST
+    evaluator (never eval; honestly refuses division by zero).
+  - `notes` — "remind me to X" / "what are my notes" / "delete note 3"
+    persist per-session notes in a `notes` table (Alembic migration +
+    `NoteRepository`), also exposed as `/notes`, `/note <text>`,
+    `/delete-note <id>`.
+  Tools answer even in `FACTUAL_ONLY` mode because they compute instead
+  of guess. A 135M model cannot emit reliable tool-call JSON, so tools
+  are opted in by high-precision triggers: no match, no action, and the
+  message falls through to the LLM — verified live:
+  "what is 5*3" → "5*3 = 15", "what is 2+2" → "4." (KB keeps
+  precedence), "tell me a joke" → refused. Knob: `TOOLS_ENABLED`.
 - **Phase 6 (Transformers)**: complete — the transformer architecture
   built from scratch (`app/transformer/`): sinusoidal positional
   encoding, multi-head scaled dot-product attention, pre-norm encoder

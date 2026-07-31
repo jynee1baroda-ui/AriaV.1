@@ -27,8 +27,10 @@ from app.errors import InvalidSessionIdError
 from app.models import Conversation, Message
 from app.persistence.memory_repository import MemoryRepository
 from app.persistence.message_repository import MessageRepository
+from app.persistence.note_repository import NoteRepository
 from app.services.intent_router import IntentRouter
 from app.services.memory_service import MemoryService
+from app.tools import ToolRegistry, default_tools
 
 
 class ChatService:
@@ -41,6 +43,7 @@ class ChatService:
         router: IntentRouter | None = None,
         llm: object | None = None,
         knowledge: object | None = None,
+        tools: ToolRegistry | None = None,
         factual_only: bool | None = None,
     ) -> None:
         # Injection point: tests build a repository over a temp database
@@ -61,6 +64,13 @@ class ChatService:
         # Phase 7 hardening: the verified knowledge base and the
         # factual-only gate (never answer unverified facts).
         self._knowledge = knowledge
+        # Phase 11 foundation (tool calling preview): the deterministic
+        # tools. When enabled and none injected, build the defaults over
+        # the SAME engine as the repository, so notes and messages live
+        # in whichever database the test chose.
+        if tools is None and config.TOOLS_ENABLED:
+            tools = ToolRegistry(default_tools(NoteRepository(self._repository.engine)))
+        self._tools = tools
         self._factual_only = factual_only
         self._sessions: dict[str, Conversation] = {}
         # One lock guarding ALL session access. Correct and simple.
@@ -100,6 +110,7 @@ class ChatService:
                 router=self._router,
                 llm=self._llm,
                 knowledge=self._knowledge,
+                tools=self._tools,
                 factual_only=self._factual_only,
             )
             reply = assistant.respond(message)

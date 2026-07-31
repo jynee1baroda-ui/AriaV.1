@@ -34,8 +34,10 @@ from app.assistant import Assistant
 from app.kb.knowledge import KnowledgeBase
 from app.llm.generator import LLMGenerator
 from app.models import Conversation
+from app.persistence.note_repository import NoteRepository
 from app.services.intent_router import IntentRouter
 from app.services.memory_service import MemoryService
+from app.tools import ToolRegistry, default_tools
 
 logging.basicConfig(
     level=logging.INFO,
@@ -70,6 +72,8 @@ def main() -> NoReturn:
     #    it loads lazily and degrades to the echo when unavailable. In
     #    factual mode (the default) the verified knowledge base answers
     #    facts and everything unverified is REFUSED - never guessed.
+    #    The tools (Phase 11 foundation) give it deterministic actions -
+    #    clock, calendar, calculator, notes - that answer before the LLM.
     memory_service = MemoryService()
     assistant = Assistant(
         name=config.ASSISTANT_NAME,
@@ -79,6 +83,7 @@ def main() -> NoReturn:
         router=IntentRouter() if config.INTENT_CLASSIFIER_ENABLED else None,
         llm=LLMGenerator() if config.LLM_ENABLED else None,
         knowledge=KnowledgeBase() if config.KNOWLEDGE_ENABLED else None,
+        tools=ToolRegistry(default_tools(NoteRepository())) if config.TOOLS_ENABLED else None,
         factual_only=config.FACTUAL_ONLY,
     )
 

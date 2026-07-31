@@ -52,9 +52,11 @@ class TestChatWithLlm(unittest.TestCase):
         cls._tmpdir.cleanup()
 
     def test_unanswered_question_gets_llm_answer(self):
+        # "tell me a joke" is not handled by any deterministic tool, so
+        # it must fall through to the injected LLM stub.
         response = self.client.post(
             "/api/v1/chat",
-            json={"session_id": "llm-q", "message": "what is 2+2"},
+            json={"session_id": "llm-q", "message": "tell me a joke"},
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["reply"], "4")

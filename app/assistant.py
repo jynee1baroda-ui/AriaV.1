@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from app.kb.knowledge import KnowledgeBase
     from app.llm.generator import LLMGenerator
     from app.services.intent_router import IntentRouter
+    from app.tools.base import Tool, ToolRegistry
 
 logger = logging.getLogger("assistant")
 
@@ -60,6 +61,7 @@ class Assistant:
         router: IntentRouter | None = None,
         llm: LLMGenerator | None = None,
         knowledge: KnowledgeBase | None = None,
+        tools: ToolRegistry | None = None,
         factual_only: bool | None = None,
     ) -> None:
         self.name = name
@@ -78,6 +80,11 @@ class Assistant:
         # Phase 7 hardening: the verified knowledge base. Facts are
         # answered ONLY from here (never free-generated) in factual mode.
         self.knowledge = knowledge
+        # Phase 11 foundation (tool calling preview): deterministic
+        # actions (clock, calendar, calculator, notes) run BEFORE the
+        # LLM because they compute instead of guessing. Tools answer
+        # even in factual mode - they are never unverified guesses.
+        self.tools = tools
         # When True (the default), Aria refuses to answer anything that
         # is not verified - no LLM generation, no echo pretending to be
         # an answer. Honesty over coverage.
@@ -158,9 +165,13 @@ class Assistant:
             return extracted[0].reply if extracted else None
         if intent is Intent.RECALL_QUESTION:
             return self._answer_from_memory(normalized)
-        # Intent.OTHER: still give verified facts a chance before
-        # refusing (or, in open mode, before the LLM/echo).
-        return self._knowledge_answer(normalized) or self._fallback_answer(user_input, normalized)
+        # Intent.OTHER: give verified facts and deterministic TOOLS a
+        # chance before refusing (or, in open mode, before the LLM/echo).
+        return (
+            self._knowledge_answer(normalized)
+            or self._tool_reply(normalized)
+            or self._fallback_answer(user_input, normalized)
+        )
 
     def _rule_reply(self, user_input: str, normalized: str) -> str:
         """Deterministic fallback - the original Phase 1-3 dispatch.
@@ -189,12 +200,48 @@ class Assistant:
         if extracted:
             return extracted[0].reply
         # QUESTIONS that consult long-term memory come next, then the
-        # verified knowledge base, then the last resort.
+        # verified knowledge base, then the deterministic tools (clock,
+        # calculator, notes), then the last resort.
         return (
             self._answer_from_memory(normalized)
             or self._knowledge_answer(normalized)
+            or self._tool_reply(normalized)
             or self._fallback_answer(user_input, normalized)
         )
+
+    def _tool_reply(self, normalized: str) -> str | None:
+        """Run the deterministic tools (Phase 11 preview).
+
+        Tools answer BEFORE the LLM because they are not guesses: the
+        clock reads the real time, the calculator computes real
+        arithmetic, notes read/write real storage. A tool that does not
+        recognize the message returns None and the chain falls through.
+
+        Args:
+            normalized: The normalized user message.
+
+        Returns:
+            The tool's answer, or None when no tool matched.
+        """
+        if self.tools is None:
+            return None
+        return self.tools.dispatch(normalized, session_id=self.session_id)
+
+    def _notes_tool(self) -> Tool | None:
+        """Return the registered notes tool, or None.
+
+        Lets the /notes, /note and /delete-note commands reach the same
+        store the natural-language tool uses.
+
+        Returns:
+            The notes tool instance, or None when not wired.
+        """
+        if self.tools is None:
+            return None
+        for tool in self.tools:
+            if tool.name == "notes":
+                return tool
+        return None
 
     def _knowledge_answer(self, normalized: str) -> str | None:
         """Answer a factual question from the VERIFIED knowledge base.
@@ -335,7 +382,7 @@ class Assistant:
             return (
                 True,
                 "Commands: /help  /stats  /about  /memory  /remember <fact>  "
-                "/forget <id>  /exit",
+                "/forget <id>  /notes  /note <text>  /delete-note <id>  /exit",
             )
         if command == "/stats":
             counts: dict[str, int] = self.conversation.count_by_role()
@@ -371,6 +418,33 @@ class Assistant:
             if deleted:
                 return True, f"Forgot memory {memory_id}."
             return True, f"No memory with id {memory_id}. Check /memory."
+        # Notes (Phase 11 foundation - tool calling preview): the same
+        # store the natural-language notes tool writes to, exposed as
+        # commands for the REPL.
+        if command == "/notes":
+            notes_tool = self._notes_tool()
+            if notes_tool is None:
+                return True, "Notes are not available in this mode."
+            return True, notes_tool.list_for(self.session_id)
+        if command.startswith("/note "):
+            notes_tool = self._notes_tool()
+            if notes_tool is None:
+                return True, "Notes are not available in this mode."
+            content = command[len("/note "):].strip()
+            if not content:
+                return True, "Usage: /note <something to remember>"
+            note = notes_tool.add(content, self.session_id)
+            return True, f"Note saved: {note.content}."
+        if command.startswith("/delete-note "):
+            notes_tool = self._notes_tool()
+            if notes_tool is None:
+                return True, "Notes are not available in this mode."
+            note_id = command[len("/delete-note "):].strip()
+            if not note_id.isdigit():
+                return True, "Usage: /delete-note <note id> (find ids with /notes)"
+            if notes_tool.delete(int(note_id), self.session_id):
+                return True, f"Deleted note {note_id}."
+            return True, f"No note with id {note_id}. Check /notes."
         if command == "/about":
             return (
                 True,
