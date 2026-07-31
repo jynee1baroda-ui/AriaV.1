@@ -19,6 +19,9 @@ from dotenv import load_dotenv
 # Load .env if present (it is gitignored; never commit real values).
 # The .env.example file documents every variable we read.
 _PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent
+# Public alias so other modules (e.g. db.py's Alembic wiring) can locate
+# project files without re-deriving the path.
+PROJECT_ROOT: Path = _PROJECT_ROOT
 load_dotenv(_PROJECT_ROOT / ".env")
 
 # str - immutable text

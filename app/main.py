@@ -32,13 +32,16 @@ def create_app() -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        """Startup: ensure tables exist. Shutdown: close the DB pool.
+        """Startup: migrate schema. Shutdown: close the DB pool.
 
         The lifespan runs when the server actually starts (uvicorn or a
         TestClient used as a context manager) - the correct place for
         infrastructure setup, not module import time.
+
+        Schema is brought up to date with Alembic (M4), the versioned,
+        reversible migration tool - never create_all in production.
         """
-        db.init_db()
+        db.run_migrations()
         yield
         db.engine.dispose()
 

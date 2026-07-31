@@ -5,10 +5,15 @@ roadmap. See the current phase below.
 
 ## Status
 
-- **Phase 4 (Database Integration)**: Milestone 3 complete — web path is
-  100% database-backed; `/api/v1/ready` readiness probe with real DB
+- **Phase 4 (Database Integration)**: Milestone 4 complete — schema is
+  versioned and reversible with Alembic. The app runs `alembic upgrade
+  head` on startup (never `create_all`); migrations live in
+  `alembic/versions/` and are recorded in the `alembic_version` table.
+  Tests prove upgrade and downgrade against a throwaway DB. 72 passing
+  tests.
+- **Phase 4, Milestone 3**: `/api/v1/ready` readiness probe with real DB
   check (liveness vs readiness distinction); dead file-session code
-  removed. 69 passing tests.
+  removed.
 - **Phase 4, Milestone 2**: storage moved to `MessageRepository`
   (SQLAlchemy); incremental inserts; `StorageError` wrapping.
 - **Phase 4, Milestone 1**: SQLAlchemy infra, `sessions`/`messages`
@@ -51,6 +56,25 @@ Read that session's history:
 ```powershell
 Invoke-RestMethod -Uri http://127.0.0.1:8000/api/v1/history/demo
 ```
+
+## Database migrations (Alembic)
+
+The schema is managed by Alembic — every change is a versioned,
+reversible migration. The server applies pending migrations on startup,
+so a fresh checkout just works; there is no manual step to run the app.
+
+```powershell
+# Generate a new migration from model changes (review it first!)
+$env:DATABASE_URL = "sqlite:///..."  # only when not using the default
+.\.venv\Scripts\python -m alembic revision --autogenerate -m "describe change"
+
+# Apply / roll back
+.\.venv\Scripts\python -m alembic upgrade head
+.\.venv\Scripts\python -m alembic downgrade -1
+```
+
+`alembic/versions/` holds the migration files; the `alembic_version`
+table in the database records which revision is currently applied.
 
 ## Run the CLI (Phase 1 assistant)
 

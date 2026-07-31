@@ -8,14 +8,56 @@ Phase 4, Milestone 1: the ORM infrastructure. Two things to absorb:
    on per connection with a PRAGMA - otherwise ON DELETE CASCADE and
    FK violations would be silently ignored. PostgreSQL enforces FKs
    natively, so this pragma is a no-op there.
+
+Phase 4, Milestone 4: Alembic becomes the schema's source of truth.
+The application runs `alembic upgrade head` on startup via
+run_migrations(); create_all survives only as a fast path for tests.
 """
 
 from __future__ import annotations
 
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from app import config
+
+# Alembic config file location, resolved from the project root so
+# run_migrations() works regardless of the process's current directory.
+ALEMBIC_INI_PATH = config.PROJECT_ROOT / "alembic.ini"
+
+
+def alembic_config(database_url: str | None = None) -> Config:
+    """Build an Alembic Config pointing at a specific database.
+
+    env.py honors a pre-set sqlalchemy.url (it falls back to the
+    app-wide DATABASE_URL only when the ini still holds the default
+    placeholder), so tests can migrate a throwaway temp database.
+
+    Args:
+        database_url: Which database to migrate; defaults to config.
+
+    Returns:
+        A configured Alembic Config object.
+    """
+    cfg = Config(str(ALEMBIC_INI_PATH))
+    cfg.set_main_option("sqlalchemy.url", database_url or config.DATABASE_URL)
+    return cfg
+
+
+def run_migrations(database_url: str | None = None) -> None:
+    """Bring the database schema up to the latest migration.
+
+    This is the production-grade replacement for create_all: Alembic
+    applies every pending revision in order and records the version in
+    the alembic_version table, so any database at any point in history
+    can be advanced deterministically.
+
+    Args:
+        database_url: Which database to migrate; defaults to config.
+    """
+    command.upgrade(alembic_config(database_url), "head")
 
 
 class Base(DeclarativeBase):
@@ -56,8 +98,10 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 def init_db(engine: Engine = engine) -> None:
     """Create all tables that don't exist yet.
 
-    Dev-friendly convenience. Real migrations arrive in M4 (Alembic);
-    create_all is intentionally NOT a production migration tool.
+    Dev/test convenience ONLY: tests create tables on a throwaway temp
+    database faster than running Alembic each time. The application
+    itself never calls this - it runs run_migrations() instead, so the
+    deployed schema always matches the versioned migration history.
 
     Args:
         engine: Which engine to create tables on (tests pass their own).
