@@ -16,7 +16,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from app import config
-from app.llm.generator import context_prompt
+from app.llm.generator import build_messages, load_system_prompt
 from app.ml.dataset import Intent
 from app.models import Conversation, Memory
 from app.services.memory_service import MemoryExtractor, MemoryService
@@ -241,7 +241,8 @@ class Assistant:
             return "I don't have a verified answer for that."
         if self.llm is not None:
             exchanges = self._recent_exchanges(config.LLM_CONTEXT_TURNS)
-            answer = self.llm.generate(context_prompt(exchanges, user_input))
+            messages = build_messages(load_system_prompt(), exchanges, user_input)
+            answer = self.llm.generate(messages)
             # Guard: a tiny base model sometimes answers by REPEATING
             # the question. Parroting the input is not answering - fall
             # through to the echo, which is at least honest.

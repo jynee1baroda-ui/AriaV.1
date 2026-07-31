@@ -30,7 +30,13 @@ class StubClassifier:
 
 
 def make_assistant(router: IntentRouter, **kwargs) -> Assistant:
-    return Assistant(name="Aria", conversation=Conversation(), router=router, **kwargs)
+    return Assistant(
+        name="Aria",
+        conversation=Conversation(),
+        router=router,
+        factual_only=True,  # this suite tests factual-mode routing
+        **kwargs,
+    )
 
 
 class TestAssistantMlRouting(unittest.TestCase):
@@ -104,7 +110,11 @@ class TestAssistantMlRouting(unittest.TestCase):
         )
 
     def test_no_router_uses_rules_only(self):
-        assistant = Assistant(name="Aria", conversation=Conversation())
+        assistant = Assistant(
+            name="Aria",
+            conversation=Conversation(),
+            factual_only=True,
+        )
         self.assertEqual(assistant.respond("hello"), "Hello! I'm Aria. How can I help?")
         self.assertEqual(
             assistant.respond("pancakes"),

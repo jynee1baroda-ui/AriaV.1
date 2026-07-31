@@ -28,7 +28,10 @@ class ChatApiTestCase(unittest.TestCase):
             f"sqlite:///{(Path(cls._tmpdir.name) / 'api.db').as_posix()}"
         )
         init_db(cls._engine)
-        service = ChatService(repository=MessageRepository(cls._engine))
+        service = ChatService(
+            repository=MessageRepository(cls._engine),
+            factual_only=True,  # this suite tests factual-mode contracts
+        )
         # Dependency override: every request now receives THIS service.
         # This is why Depends() exists - swap an implementation without
         # touching route code.

@@ -18,16 +18,35 @@ roadmap. See the current phase below.
   model has no world model (it answered "how many continents" with
   "14"), so answers are plausible text, not guaranteed truth — the job
   of RAG (Phase 9) and fine-tuning (Phase 19). **Factual hardening**:
-  by default (`FACTUAL_ONLY=True`) Aria answers facts ONLY from a
+  with `FACTUAL_ONLY=True` (Phase 7's default, now off by default —
+  see Phase 8) Aria answers facts ONLY from a
   verified, curated knowledge base (`app/kb/`) plus taught memory, and
   REFUSES anything unverified ("I don't have a verified answer for
   that.") instead of hallucinating — "what is the capital of France?"
-  → "Paris.", never "France". Set `FACTUAL_ONLY=False` to re-enable
-  open-ended LLM answers (they can be wrong).
+  → "Paris.", never "France". `FACTUAL_ONLY=False` (Phase 8 default)
+  re-enables open-ended LLM answers (they can be wrong), while verified
+  facts still hit the knowledge base first.
   Knobs: `LLM_ENABLED`, `LLM_MODEL_ID`, `LLM_MAX_NEW_TOKENS`,
   `LLM_TEMPERATURE` (0 = greedy/deterministic), `LLM_LOCAL_FILES_ONLY`,
   `LLM_CONTEXT_TURNS`, `FACTUAL_ONLY`, `KNOWLEDGE_ENABLED` in
   `app/config.py`.
+- **Phase 8 (Prompt Engineering)**: complete — Aria is now steered by a
+  real **system prompt** (`app/prompts/aria_system.md`, loaded from
+  `config.SYSTEM_PROMPT_PATH`) and speaks through the model's **chat
+  template** (`apply_chat_template`), the only mechanism that makes a
+  model follow a system prompt. Default model is now the instruction
+  tuned `HuggingFaceTB/SmolLM2-135M-Instruct` (still CPU-friendly).
+  Editing `aria_system.md` edits Aria's personality (casual, matched
+  response length, honest uncertainty). `build_messages()` assembles
+  system + history + question; the old `Q:...\nA:` builders remain for
+  base-model testing. `FACTUAL_ONLY` is now `False` by default
+  (conversational), but verified facts still hit the KB FIRST
+  ("capital of France" → "Paris."), so exact facts stay correct while
+  the LLM carries open conversation (and can be wrong — acknowledged).
+  Knobs: `LLM_ENABLED`, `LLM_MODEL_ID`, `LLM_MAX_NEW_TOKENS`,
+  `LLM_TEMPERATURE` (0 = greedy/deterministic), `LLM_LOCAL_FILES_ONLY`,
+  `LLM_CONTEXT_TURNS`, `SYSTEM_PROMPT_PATH`, `FACTUAL_ONLY`,
+  `KNOWLEDGE_ENABLED` in `app/config.py`.
 - **Phase 6 (Transformers)**: complete — the transformer architecture
   built from scratch (`app/transformer/`): sinusoidal positional
   encoding, multi-head scaled dot-product attention, pre-norm encoder

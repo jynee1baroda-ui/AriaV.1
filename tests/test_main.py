@@ -16,7 +16,11 @@ class TestAssistant(unittest.TestCase):
 
     def setUp(self) -> None:
         self.conversation = Conversation()
-        self.assistant = Assistant(name="Aria", conversation=self.conversation)
+        self.assistant = Assistant(
+            name="Aria",
+            conversation=self.conversation,
+            factual_only=True,  # this suite tests factual-mode contracts
+        )
 
     def test_respond_greeting(self) -> None:
         self.assertEqual(

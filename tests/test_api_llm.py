@@ -24,7 +24,7 @@ class StubEngine:
     def __init__(self, text: str) -> None:
         self._text = text
 
-    def generate(self, prompt: str) -> str:
+    def generate(self, messages: list[dict[str, str]]) -> str:
         return self._text
 
 

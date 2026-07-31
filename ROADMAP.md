@@ -14,7 +14,7 @@ completed phase leaves a working project behind.
 | 5 | Deep Learning | ✅ complete |
 | 6 | Transformers | ✅ complete |
 | 7 | Large Language Models | ✅ complete |
-| 8 | Prompt Engineering | ⬜ |
+| 8 | Prompt Engineering | ✅ complete |
 | 9 | RAG | ⬜ |
 | 10 | Memory Systems | 🔶 foundation built (preview) |
 | 11 | Tool Calling | ⬜ |
@@ -47,6 +47,24 @@ completed phase leaves a working project behind.
   unverified" is enforced by construction, and `FACTUAL_ONLY=False`
   re-enables the open LLM for experimentation. RAG (Phase 9) will grow
   the verified store into document-grounded answering.
+- **Phase 8 (Prompt Engineering)** complete: Aria's behavior is now
+  steered by a real **system prompt** (`app/prompts/aria_system.md`),
+  loaded via `config.SYSTEM_PROMPT_PATH` and applied as a chat
+  `<system>` message. Generation switched from the hand-rolled
+  `Q:...\nA:` format to the tokenizer's **chat template**
+  (`apply_chat_template`), which is what makes a model follow a system
+  prompt at all — base models ignore it, so the default model is now
+  the instruction-tuned `HuggingFaceTB/SmolLM2-135M-Instruct`.
+  `build_messages()` assembles system + history + question, and
+  `LLM_MAX_NEW_TOKENS` grew 32→64 because Instruct needs room to
+  answer naturally. Personality doc (natural/casual tone, matched
+  response length, honest uncertainty) edits directly through the
+  markdown file. The old `qa_prompt`/`context_prompt` builders remain
+  for the base-model path. `FACTUAL_ONLY` is `False` by default now —
+  conversational mode — but verified facts (Paris, continents, Hamlet,
+  math) ALWAYS hit the KB first, so exact-fact correctness is
+  preserved while the LLM carries everything else (and can be wrong;
+  that tradeoff is acknowledged).
 - **Phase 10 (Memory Systems)** is the only phase with work done ahead
   of schedule: `memories` table, `MemoryRepository`, `MemoryService`
   (consolidation + retrieval). It is the storage foundation that RAG
