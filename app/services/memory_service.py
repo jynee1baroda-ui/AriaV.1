@@ -223,3 +223,18 @@ class MemoryService:
             The stored Memory.
         """
         return self._repository.add_memory(content, category, session_id)
+
+    def delete(self, memory_id: int) -> bool:
+        """Delete one memory by its id (for /forget).
+
+        The "factual answers" escape hatch: memories are only as true as
+        what was taught, so the user must be able to un-teach a wrong
+        fact (e.g. a test "my name is Alice" that is not theirs).
+
+        Args:
+            memory_id: The id shown by /memory.
+
+        Returns:
+            True if a memory was deleted, False if the id did not exist.
+        """
+        return self._repository.delete_memory(memory_id)

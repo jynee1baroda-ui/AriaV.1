@@ -175,6 +175,27 @@ class TestAssistantMemoryCommands(unittest.TestCase):
         self.assistant.respond("my name is Alice")
         self.assertEqual(self.assistant.respond("what is my name"), "Your name is Alice.")
 
+    def test_forget_command_removes_a_memory(self) -> None:
+        """The factual-correction escape hatch: un-teach a wrong fact."""
+        self.assistant.respond("my name is Alice")
+        stored = self.memory_service.get_all()
+        memory_id = stored[0].id
+        keep_going, output = self.assistant.handle_command(f"/forget {memory_id}")
+        self.assertTrue(keep_going)
+        self.assertIn("Forgot", output)
+        self.assertEqual(self.memory_service.get_all(), [])
+        self.assertIn("I don't know your name yet", self.assistant.respond("what is my name"))
+
+    def test_forget_rejects_non_numeric_id(self) -> None:
+        keep_going, output = self.assistant.handle_command("/forget alice")
+        self.assertTrue(keep_going)
+        self.assertIn("Usage: /forget", output)
+
+    def test_forget_missing_id_is_graceful(self) -> None:
+        keep_going, output = self.assistant.handle_command("/forget 999")
+        self.assertTrue(keep_going)
+        self.assertIn("No memory with id 999", output)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -265,7 +265,8 @@ class Assistant:
         if command == "/help":
             return (
                 True,
-                "Commands: /help  /stats  /about  /memory  /remember <fact>  /exit",
+                "Commands: /help  /stats  /about  /memory  /remember <fact>  "
+                "/forget <id>  /exit",
             )
         if command == "/stats":
             counts: dict[str, int] = self.conversation.count_by_role()
@@ -291,6 +292,16 @@ class Assistant:
                 return True, "Usage: /remember <something to remember>"
             self.memory_service.add(content, category="fact", session_id=self.session_id)
             return True, f"Okay, I'll remember that: {content}"
+        if command.startswith("/forget "):
+            if self.memory_service is None:
+                return True, "Long-term memory is not available in this mode."
+            memory_id = command[len("/forget "):].strip()
+            if not memory_id.isdigit():
+                return True, "Usage: /forget <memory id> (find ids with /memory)"
+            deleted = self.memory_service.delete(int(memory_id))
+            if deleted:
+                return True, f"Forgot memory {memory_id}."
+            return True, f"No memory with id {memory_id}. Check /memory."
         if command == "/about":
             return (
                 True,

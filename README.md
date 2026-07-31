@@ -52,7 +52,8 @@ roadmap. See the current phase below.
   long-term memory: `MemoryExtractor` distills statements, dedup stores
   them, and the Assistant answers across sessions (rule-based until RAG
   in Phase 9 / full memory in Phase 10). CLI has `/remember` and
-  `/memory`.
+  `/memory`. CLI commands: `/remember <fact>`, `/forget <id>` (to
+  correct a wrong taught fact), `/memory`.
 - **Phase 3 (Databases)**: complete. Schema versioned and reversible
   with Alembic; app runs `alembic upgrade head` on startup.
 - **Phase 2 (Backend Development)**: complete — FastAPI app, routes /
