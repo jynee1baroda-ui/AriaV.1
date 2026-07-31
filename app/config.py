@@ -31,7 +31,7 @@ ASSISTANT_INFO: dict[str, str] = {
 # lookups. A set (not a list) is right here because:
 #   1. We only check membership ("is 'hello' a greeting?").
 #   2. Duplicates would be meaningless anyway.
-GREETING_WORDS: set[str] = {"hello", "hi", "hey", "yo", "hiya"}
+GREETING_WORDS: set[str] = {"hello", "hi", "hey", "yo", "hiya", "hola"}
 
 # tuple - an immutable ordered sequence. Coordinates/settings that must
 # never change once defined belong in a tuple, not a list.
