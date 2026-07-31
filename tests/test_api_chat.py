@@ -55,13 +55,16 @@ class TestChatEndpoint(ChatApiTestCase):
         self.assertEqual(payload["session_id"], "test-greet")
         self.assertEqual(payload["reply"], "Hello! I'm Aria. How can I help?")
 
-    def test_chat_echoes_unknown_text(self) -> None:
+    def test_chat_refuses_unverified_text(self) -> None:
         response = self.client.post(
             "/api/v1/chat",
             json={"session_id": "test-echo", "message": "tell me a joke"},
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["reply"], "You said: tell me a joke")
+        self.assertEqual(
+            response.json()["reply"],
+            "I don't have a verified answer for that.",
+        )
 
     def test_blank_message_rejected_with_422(self) -> None:
         response = self.client.post(

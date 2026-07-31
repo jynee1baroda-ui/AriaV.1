@@ -17,10 +17,17 @@ roadmap. See the current phase below.
   → "London", then "and rome?" → "Rome". Honest limits: a 135M *base*
   model has no world model (it answered "how many continents" with
   "14"), so answers are plausible text, not guaranteed truth — the job
-  of RAG (Phase 9) and fine-tuning (Phase 19).
+  of RAG (Phase 9) and fine-tuning (Phase 19). **Factual hardening**:
+  by default (`FACTUAL_ONLY=True`) Aria answers facts ONLY from a
+  verified, curated knowledge base (`app/kb/`) plus taught memory, and
+  REFUSES anything unverified ("I don't have a verified answer for
+  that.") instead of hallucinating — "what is the capital of France?"
+  → "Paris.", never "France". Set `FACTUAL_ONLY=False` to re-enable
+  open-ended LLM answers (they can be wrong).
   Knobs: `LLM_ENABLED`, `LLM_MODEL_ID`, `LLM_MAX_NEW_TOKENS`,
   `LLM_TEMPERATURE` (0 = greedy/deterministic), `LLM_LOCAL_FILES_ONLY`,
-  `LLM_CONTEXT_TURNS` in `app/config.py`.
+  `LLM_CONTEXT_TURNS`, `FACTUAL_ONLY`, `KNOWLEDGE_ENABLED` in
+  `app/config.py`.
 - **Phase 6 (Transformers)**: complete — the transformer architecture
   built from scratch (`app/transformer/`): sinusoidal positional
   encoding, multi-head scaled dot-product attention, pre-norm encoder

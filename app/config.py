@@ -132,3 +132,14 @@ LLM_LOCAL_FILES_ONLY: bool = False
 # purpose: every pair costs prompt tokens and a 135M model drifts on
 # long prompts. 4 turns is a comfortable short-memory size.
 LLM_CONTEXT_TURNS: int = 4
+
+# Factual integrity (Phase 7 hardening): the user demands answers that
+# are NEVER fake or unverified. A 135M generative model cannot be made
+# reliable by prompting - so FACTUAL_ONLY turns OFF free generation:
+# Aria answers only from rules, taught memory, and the verified
+# knowledge base, and REFUSES everything else ("I don't have a verified
+# answer for that"). Set False to re-enable the LLM's open-ended (and
+# potentially hallucinating) answers.
+FACTUAL_ONLY: bool = True
+# Consult the verified knowledge base (app/kb) for factual answers.
+KNOWLEDGE_ENABLED: bool = True

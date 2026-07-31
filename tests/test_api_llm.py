@@ -40,6 +40,7 @@ class TestChatWithLlm(unittest.TestCase):
         cls.service = ChatService(
             repository=MessageRepository(cls._engine),
             llm=llm,
+            factual_only=False,  # open mode: this test proves LLM wiring
         )
         app.dependency_overrides[get_chat_service] = lambda: cls.service
         cls.client = TestClient(app)

@@ -22,6 +22,7 @@ from fastapi.responses import JSONResponse
 from app import config, db
 from app.api.routes import router
 from app.errors import InvalidSessionIdError
+from app.kb.knowledge import KnowledgeBase
 from app.llm.generator import LLMGenerator
 from app.security.rate_limiter import RateLimiter
 from app.services.chat_service import ChatService
@@ -74,10 +75,14 @@ def create_app() -> FastAPI:
     # rules if the model artifact is missing. The LLM answer engine
     # (Phase 7 M1) is shared too and degrades to the echo if the model
     # cannot be loaded. Its load is LAZY, so startup stays fast and the
-    # model only downloads on the first unanswered question.
+    # model only downloads on the first unanswered question. The
+    # verified knowledge base + factual_only gate (Phase 7 hardening)
+    # mean facts come only from checked sources.
     app.state.chat_service = ChatService(
         router=IntentRouter() if config.INTENT_CLASSIFIER_ENABLED else None,
         llm=LLMGenerator() if config.LLM_ENABLED else None,
+        knowledge=KnowledgeBase() if config.KNOWLEDGE_ENABLED else None,
+        factual_only=config.FACTUAL_ONLY,
     )
 
     # The abuse guard: one limiter shared by every request. Routes

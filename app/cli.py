@@ -31,6 +31,7 @@ if __package__ in (None, ""):
 
 from app import config, storage
 from app.assistant import Assistant
+from app.kb.knowledge import KnowledgeBase
 from app.llm.generator import LLMGenerator
 from app.models import Conversation
 from app.services.intent_router import IntentRouter
@@ -66,7 +67,9 @@ def main() -> NoReturn:
     #    router (Phase 4 M2) advises on intent when the trained model
     #    exists; without one the assistant runs on rules alone. The LLM
     #    answer engine (Phase 7 M1) answers anything the rules cannot;
-    #    it loads lazily and degrades to the echo when unavailable.
+    #    it loads lazily and degrades to the echo when unavailable. In
+    #    factual mode (the default) the verified knowledge base answers
+    #    facts and everything unverified is REFUSED - never guessed.
     memory_service = MemoryService()
     assistant = Assistant(
         name=config.ASSISTANT_NAME,
@@ -75,6 +78,8 @@ def main() -> NoReturn:
         memory_service=memory_service,
         router=IntentRouter() if config.INTENT_CLASSIFIER_ENABLED else None,
         llm=LLMGenerator() if config.LLM_ENABLED else None,
+        knowledge=KnowledgeBase() if config.KNOWLEDGE_ENABLED else None,
+        factual_only=config.FACTUAL_ONLY,
     )
 
     # 3. Run, and GUARANTEE persistence on every exit path.

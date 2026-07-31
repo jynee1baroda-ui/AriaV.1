@@ -40,6 +40,8 @@ class ChatService:
         memory_service: MemoryService | None = None,
         router: IntentRouter | None = None,
         llm: object | None = None,
+        knowledge: object | None = None,
+        factual_only: bool | None = None,
     ) -> None:
         # Injection point: tests build a repository over a temp database
         # so test sessions never touch the real data/assistant.db. The
@@ -56,6 +58,10 @@ class ChatService:
         # Phase 7 M1: the shared LLM answer engine (or None = echo only).
         # Like the router, it lazily loads the model on first use.
         self._llm = llm
+        # Phase 7 hardening: the verified knowledge base and the
+        # factual-only gate (never answer unverified facts).
+        self._knowledge = knowledge
+        self._factual_only = factual_only
         self._sessions: dict[str, Conversation] = {}
         # One lock guarding ALL session access. Correct and simple.
         # (Improvement for Phase 7: per-session locks, so a slow chat
@@ -93,6 +99,8 @@ class ChatService:
                 memory_service=self._memory,
                 router=self._router,
                 llm=self._llm,
+                knowledge=self._knowledge,
+                factual_only=self._factual_only,
             )
             reply = assistant.respond(message)
             # Persist ONLY the messages appended by this turn

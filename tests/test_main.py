@@ -33,8 +33,12 @@ class TestAssistant(unittest.TestCase):
             "My name is Aria.",
         )
 
-    def test_respond_fallback_echo(self) -> None:
-        self.assertEqual(self.assistant.respond("pancakes"), "You said: pancakes")
+    def test_respond_fallback_refuses_unverified(self) -> None:
+        """Factual mode: an unknown question is REFUSED, never guessed."""
+        self.assertEqual(
+            self.assistant.respond("pancakes"),
+            "I don't have a verified answer for that.",
+        )
 
     def test_respond_records_both_sides_of_exchange(self) -> None:
         self.assistant.respond("hello")

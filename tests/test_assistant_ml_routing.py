@@ -55,12 +55,12 @@ class TestAssistantMlRouting(unittest.TestCase):
 
     def test_teach_intent_without_extractable_fact_falls_back_to_rules(self):
         """A confident TEACH label is not enough: no fact, no answer -
-        the deterministic chain (echo) takes over."""
+        the deterministic chain (refusal in factual mode) takes over."""
         router = IntentRouter(classifier=StubClassifier(Intent.TEACH_FACT, 0.99))
         assistant = make_assistant(router)
         self.assertEqual(
             assistant.respond("just so you know, i have a cat"),
-            "You said: just so you know, i have a cat",
+            "I don't have a verified answer for that.",
         )
 
     def test_recall_intent_answers_from_memory(self):
@@ -74,7 +74,7 @@ class TestAssistantMlRouting(unittest.TestCase):
     def test_recall_intent_without_rule_match_falls_back_to_rules(self):
         """The question matcher is authoritative for WHICH memory to
         fetch; a confident RECALL label for an unmatched phrasing does
-        not invent an answer."""
+        not invent an answer - it is refused."""
         router = IntentRouter(classifier=StubClassifier(Intent.RECALL_QUESTION, 0.99))
         assistant = make_assistant(
             router,
@@ -82,13 +82,16 @@ class TestAssistantMlRouting(unittest.TestCase):
         )
         self.assertEqual(
             assistant.respond("what was my name"),
-            "You said: what was my name",
+            "I don't have a verified answer for that.",
         )
 
-    def test_other_intent_echoes(self):
+    def test_other_intent_is_refused_in_factual_mode(self):
         router = IntentRouter(classifier=StubClassifier(Intent.OTHER, 0.99))
         assistant = make_assistant(router)
-        self.assertEqual(assistant.respond("pancakes"), "You said: pancakes")
+        self.assertEqual(
+            assistant.respond("pancakes"),
+            "I don't have a verified answer for that.",
+        )
 
     def test_low_confidence_falls_back_to_rules(self):
         """A weak ML signal must not override the rules - here the
@@ -103,7 +106,10 @@ class TestAssistantMlRouting(unittest.TestCase):
     def test_no_router_uses_rules_only(self):
         assistant = Assistant(name="Aria", conversation=Conversation())
         self.assertEqual(assistant.respond("hello"), "Hello! I'm Aria. How can I help?")
-        self.assertEqual(assistant.respond("pancakes"), "You said: pancakes")
+        self.assertEqual(
+            assistant.respond("pancakes"),
+            "I don't have a verified answer for that.",
+        )
 
     def test_exchange_is_still_recorded(self):
         router = IntentRouter(classifier=StubClassifier(Intent.GREETING, 0.99))

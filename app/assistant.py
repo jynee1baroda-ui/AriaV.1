@@ -22,6 +22,7 @@ from app.models import Conversation, Memory
 from app.services.memory_service import MemoryExtractor, MemoryService
 
 if TYPE_CHECKING:
+    from app.kb.knowledge import KnowledgeBase
     from app.llm.generator import LLMGenerator
     from app.services.intent_router import IntentRouter
 
@@ -58,6 +59,8 @@ class Assistant:
         memory_service: MemoryService | None = None,
         router: IntentRouter | None = None,
         llm: LLMGenerator | None = None,
+        knowledge: KnowledgeBase | None = None,
+        factual_only: bool | None = None,
     ) -> None:
         self.name = name
         self.conversation = conversation
@@ -72,6 +75,13 @@ class Assistant:
         # anything the rules cannot handle (i.e. the old echo). When
         # absent - or when it fails - the echo remains the floor.
         self.llm = llm
+        # Phase 7 hardening: the verified knowledge base. Facts are
+        # answered ONLY from here (never free-generated) in factual mode.
+        self.knowledge = knowledge
+        # When True (the default), Aria refuses to answer anything that
+        # is not verified - no LLM generation, no echo pretending to be
+        # an answer. Honesty over coverage.
+        self.factual_only = config.FACTUAL_ONLY if factual_only is None else factual_only
 
     # ------------------------------------------------------------------
     # Core behavior
@@ -148,7 +158,9 @@ class Assistant:
             return extracted[0].reply if extracted else None
         if intent is Intent.RECALL_QUESTION:
             return self._answer_from_memory(normalized)
-        return self._fallback_answer(user_input)  # Intent.OTHER
+        # Intent.OTHER: still give verified facts a chance before
+        # refusing (or, in open mode, before the LLM/echo).
+        return self._knowledge_answer(normalized) or self._fallback_answer(user_input, normalized)
 
     def _rule_reply(self, user_input: str, normalized: str) -> str:
         """Deterministic fallback - the original Phase 1-3 dispatch.
@@ -176,30 +188,57 @@ class Assistant:
         extracted = MemoryExtractor.extract(user_input)
         if extracted:
             return extracted[0].reply
-        # QUESTIONS that consult long-term memory come next.
-        return self._answer_from_memory(normalized) or self._fallback_answer(user_input)
+        # QUESTIONS that consult long-term memory come next, then the
+        # verified knowledge base, then the last resort.
+        return (
+            self._answer_from_memory(normalized)
+            or self._knowledge_answer(normalized)
+            or self._fallback_answer(user_input, normalized)
+        )
 
-    def _fallback_answer(self, user_input: str) -> str:
-        """Answer what the rules cannot - or admit defeat gracefully.
+    def _knowledge_answer(self, normalized: str) -> str | None:
+        """Answer a factual question from the VERIFIED knowledge base.
 
-        Phase 7 M1: this is the old echo, upgraded. The deterministic
-        rules win on greetings, identity, taught facts and stored
-        memories; EVERYTHING else goes to the LLM. If no LLM is wired
-        (or it failed to load), the echo is the honest floor - better to
-        reflect the input than to fabricate an answer.
-
-        Phase 7 M2: the LLM gets CONTEXT. The last few exchange pairs
-        are written into the prompt (see context_prompt), so the model
-        can follow a conversation instead of answering each message in
-        a vacuum - "what about London?" now has "what is the capital
-        of france?" -> "Paris." sitting right above it.
+        This is the "never fake" guarantee: facts come only from the
+        curated, checked store. None means no verified fact matches -
+        the caller must refuse rather than guess.
 
         Args:
-            user_input: The raw text the rules could not answer.
+            normalized: The normalized user message.
 
         Returns:
-            The LLM's answer, or the echo fallback.
+            The verified answer, or None.
         """
+        if self.knowledge is None:
+            return None
+        return self.knowledge.lookup(normalized)
+
+    def _fallback_answer(self, user_input: str, normalized: str) -> str:
+        """The last resort: refuse, generate, or echo.
+
+        Phase 7 M1/M2: the deterministic rules win on greetings,
+        identity, taught facts, stored memories and verified facts;
+        everything else used to go to the LLM (with context).
+
+        Phase 7 hardening - FACTUAL MODE: when factual_only is True
+        (the default), NOTHING unverified is said. The LLM is a
+        plausible-text generator, not a truth oracle; a 135M base model
+        hallucinates confidently. So the honest answer is a refusal:
+        "I don't have a verified answer for that." No echo, no LLM -
+        silence about the unknown is the whole point.
+
+        Only when factual_only is False (open mode) does the LLM
+        generate, with the echo as its own failure floor.
+
+        Args:
+            user_input: The raw text.
+            normalized: The normalized text.
+
+        Returns:
+            A refusal, an LLM answer, or the echo.
+        """
+        if self.factual_only:
+            return "I don't have a verified answer for that."
         if self.llm is not None:
             exchanges = self._recent_exchanges(config.LLM_CONTEXT_TURNS)
             answer = self.llm.generate(context_prompt(exchanges, user_input))

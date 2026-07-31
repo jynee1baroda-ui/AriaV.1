@@ -1,14 +1,19 @@
-"""Assistant + LLM integration tests (Phase 7, Milestone 1).
+"""Assistant + LLM integration tests (Phase 7, M1 + M2 + factual hardening).
 
-The LLM is the LAST resort. The priority order must never change:
-rules (greeting/identity) > taught facts > long-term memory > LLM >
-echo. These tests prove the LLM only speaks when nothing else can,
-and that its failure degrades to the echo instead of a crash.
+The answer priority must never change:
+rules (greeting/identity) > taught facts > long-term memory > verified
+knowledge base > [factual mode: REFUSE | open mode: LLM > echo].
+
+Factual mode (the default) is the "never fake or unverified" guarantee:
+a 135M generative model hallucinates, so unknown questions are refused,
+never generated or echoed. The LLM/echo tests below pass
+factual_only=False explicitly because they exercise the OPEN mode.
 """
 
 import unittest
 
 from app.assistant import Assistant
+from app.kb.knowledge import KnowledgeBase
 from app.llm.generator import LLMGenerator, context_prompt, qa_prompt
 from app.ml.dataset import Intent
 from app.models import Conversation, Memory
@@ -41,17 +46,86 @@ def llm_generator(text: str = "42") -> tuple[LLMGenerator, RecordingEngine]:
     return LLMGenerator(engine=engine), engine
 
 
-class TestAssistantWithLlm(unittest.TestCase):
+REFUSAL = "I don't have a verified answer for that."
+
+
+class TestFactualMode(unittest.TestCase):
+    """The 'never fake or unverified' contract (Phase 7 hardening)."""
+
+    def test_verified_fact_answered_without_llm(self):
+        """The knowledge base answers; the LLM must NOT be consulted."""
+        generator, engine = llm_generator("France is the capital of France.")
+        assistant = Assistant(
+            name="Aria",
+            conversation=Conversation(),
+            llm=generator,
+            knowledge=KnowledgeBase(),
+        )
+        self.assertEqual(assistant.respond("what is the capital of France?"), "Paris.")
+        self.assertEqual(engine.prompts, [])
+
+    def test_unknown_question_refused_even_with_llm_wired(self):
+        """A wired LLM is NOT allowed to answer in factual mode."""
+        generator, engine = llm_generator("definitely a made-up answer")
+        assistant = Assistant(
+            name="Aria",
+            conversation=Conversation(),
+            llm=generator,
+            knowledge=KnowledgeBase(),
+        )
+        self.assertEqual(assistant.respond("tell me a joke"), REFUSAL)
+        self.assertEqual(engine.prompts, [])
+
+    def test_unknown_refused_without_knowledge_base(self):
+        generator, engine = llm_generator("made-up")
+        assistant = Assistant(name="Aria", conversation=Conversation(), llm=generator)
+        self.assertEqual(assistant.respond("pancakes"), REFUSAL)
+        self.assertEqual(engine.prompts, [])
+
+    def test_math_comes_from_knowledge_base(self):
+        assistant = Assistant(
+            name="Aria",
+            conversation=Conversation(),
+            knowledge=KnowledgeBase(),
+        )
+        self.assertEqual(assistant.respond("what is 2+2?"), "4.")
+
+    def test_math_spacing_is_normalized(self):
+        assistant = Assistant(
+            name="Aria",
+            conversation=Conversation(),
+            knowledge=KnowledgeBase(),
+        )
+        self.assertEqual(assistant.respond("what is 2 + 2?"), "4.")
+
+    def test_memory_still_wins_over_knowledge(self):
+        """A taught fact beats a knowledge-base fact if both matched."""
+        assistant = Assistant(
+            name="Aria",
+            conversation=Conversation(),
+            knowledge=KnowledgeBase(),
+            memories=[Memory(id=1, content="the user's name is Paris")],
+        )
+        self.assertEqual(assistant.respond("what is my name"), "Your name is Paris.")
+
+
+class TestOpenMode(unittest.TestCase):
+    """Open mode (factual_only=False): the LLM/echo behavior from M1."""
+
     def test_rules_still_win_without_consulting_llm(self):
         generator, engine = llm_generator()
-        assistant = Assistant(name="Aria", conversation=Conversation(), llm=generator)
+        assistant = Assistant(
+            name="Aria", conversation=Conversation(), llm=generator, factual_only=False
+        )
         self.assertEqual(assistant.respond("hello"), "Hello! I'm Aria. How can I help?")
         self.assertEqual(assistant.respond("what is your name"), "My name is Aria.")
         self.assertEqual(engine.prompts, [])
 
     def test_taught_fact_still_wins(self):
         generator, engine = llm_generator()
-        assistant = Assistant(name="Aria", conversation=Conversation(), llm=generator)
+        assistant = Assistant(
+            name="Aria", conversation=Conversation(), llm=generator, factual_only=False
+        )
         reply = assistant.respond("my name is Alice")
         self.assertIn("Alice", reply)
         self.assertEqual(engine.prompts, [])
@@ -62,6 +136,7 @@ class TestAssistantWithLlm(unittest.TestCase):
             name="Aria",
             conversation=Conversation(),
             llm=generator,
+            factual_only=False,
             memories=[Memory(id=1, content="the user's name is Alice")],
         )
         self.assertEqual(assistant.respond("what is my name"), "Your name is Alice.")
@@ -69,14 +144,22 @@ class TestAssistantWithLlm(unittest.TestCase):
 
     def test_unanswered_question_goes_to_llm(self):
         generator, engine = llm_generator(" 4\n\nQ: What is 2+2?\nA:")
-        assistant = Assistant(name="Aria", conversation=Conversation(), llm=generator)
+        assistant = Assistant(
+            name="Aria", conversation=Conversation(), llm=generator, factual_only=False
+        )
         self.assertEqual(assistant.respond("what is 2+2"), "4")
         self.assertEqual(engine.prompts, [qa_prompt("what is 2+2")])
 
     def test_other_intent_goes_to_llm(self):
         generator, engine = llm_generator("Paris.")
         router = IntentRouter(classifier=StubClassifier(Intent.OTHER, 0.99))
-        assistant = Assistant(name="Aria", conversation=Conversation(), router=router, llm=generator)
+        assistant = Assistant(
+            name="Aria",
+            conversation=Conversation(),
+            router=router,
+            llm=generator,
+            factual_only=False,
+        )
         self.assertEqual(
             assistant.respond("what is the capital of france"),
             "Paris.",
@@ -85,16 +168,20 @@ class TestAssistantWithLlm(unittest.TestCase):
     def test_llm_parroting_question_is_echo(self):
         """The model repeating the question verbatim is NOT an answer."""
         generator, engine = llm_generator("who wrote hamlet")
-        assistant = Assistant(name="Aria", conversation=Conversation(), llm=generator)
+        assistant = Assistant(
+            name="Aria", conversation=Conversation(), llm=generator, factual_only=False
+        )
         self.assertEqual(assistant.respond("who wrote hamlet"), "You said: who wrote hamlet")
 
     def test_llm_none_falls_back_to_echo(self):
         generator, engine = llm_generator("   ")
-        assistant = Assistant(name="Aria", conversation=Conversation(), llm=generator)
+        assistant = Assistant(
+            name="Aria", conversation=Conversation(), llm=generator, factual_only=False
+        )
         self.assertEqual(assistant.respond("pancakes"), "You said: pancakes")
 
     def test_no_llm_echoes(self):
-        assistant = Assistant(name="Aria", conversation=Conversation())
+        assistant = Assistant(name="Aria", conversation=Conversation(), factual_only=False)
         self.assertEqual(assistant.respond("pancakes"), "You said: pancakes")
 
 
@@ -106,7 +193,9 @@ class TestAssistantContextWindow(unittest.TestCase):
         conversation.add("user", "what is the capital of france")
         conversation.add("assistant", "Paris.")
         generator, engine = llm_generator("London.")
-        assistant = Assistant(name="Aria", conversation=conversation, llm=generator)
+        assistant = Assistant(
+            name="Aria", conversation=conversation, llm=generator, factual_only=False
+        )
         self.assertEqual(assistant.respond("what about london"), "London.")
         self.assertEqual(
             engine.prompts,
@@ -120,7 +209,9 @@ class TestAssistantContextWindow(unittest.TestCase):
             conversation.add("user", user)
             conversation.add("assistant", reply)
         generator, engine = llm_generator("ok")
-        assistant = Assistant(name="Aria", conversation=conversation, llm=generator)
+        assistant = Assistant(
+            name="Aria", conversation=conversation, llm=generator, factual_only=False
+        )
         assistant.respond("f")
         self.assertEqual(
             engine.prompts,
@@ -132,7 +223,9 @@ class TestAssistantContextWindow(unittest.TestCase):
         conversation = Conversation()
         conversation.add("user", "orphan")
         generator, engine = llm_generator("hi")
-        assistant = Assistant(name="Aria", conversation=conversation, llm=generator)
+        assistant = Assistant(
+            name="Aria", conversation=conversation, llm=generator, factual_only=False
+        )
         assistant.respond("what time is it")
         self.assertEqual(engine.prompts, [context_prompt([], "what time is it")])
 

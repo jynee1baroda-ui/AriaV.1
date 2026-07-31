@@ -40,8 +40,13 @@ completed phase leaves a working project behind.
   "what is the capital of france" → "France"). Honest limits remain: a
   135M *base* model has no world model (wrong on some facts, e.g.
   "how many continents" → 14) and hallucinates confidently on unknown
-  topics. That is exactly what Phases 8 (prompting), 9 (RAG grounding)
-  and 19 (fine-tuning) exist to fix.
+  topics. **Factual hardening** addresses exactly that: by default
+  (`FACTUAL_ONLY=True`) answers come ONLY from a curated verified
+  knowledge base (`app/kb/`) + taught memory, and anything unverified
+  is refused — never generated, never echoed. "Never fake or
+  unverified" is enforced by construction, and `FACTUAL_ONLY=False`
+  re-enables the open LLM for experimentation. RAG (Phase 9) will grow
+  the verified store into document-grounded answering.
 - **Phase 10 (Memory Systems)** is the only phase with work done ahead
   of schedule: `memories` table, `MemoryRepository`, `MemoryService`
   (consolidation + retrieval). It is the storage foundation that RAG
