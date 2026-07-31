@@ -16,7 +16,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from app import config
-from app.llm.generator import qa_prompt
+from app.llm.generator import context_prompt
 from app.ml.dataset import Intent
 from app.models import Conversation, Memory
 from app.services.memory_service import MemoryExtractor, MemoryService
@@ -188,6 +188,12 @@ class Assistant:
         (or it failed to load), the echo is the honest floor - better to
         reflect the input than to fabricate an answer.
 
+        Phase 7 M2: the LLM gets CONTEXT. The last few exchange pairs
+        are written into the prompt (see context_prompt), so the model
+        can follow a conversation instead of answering each message in
+        a vacuum - "what about London?" now has "what is the capital
+        of france?" -> "Paris." sitting right above it.
+
         Args:
             user_input: The raw text the rules could not answer.
 
@@ -195,13 +201,36 @@ class Assistant:
             The LLM's answer, or the echo fallback.
         """
         if self.llm is not None:
-            answer = self.llm.generate(qa_prompt(user_input))
+            exchanges = self._recent_exchanges(config.LLM_CONTEXT_TURNS)
+            answer = self.llm.generate(context_prompt(exchanges, user_input))
             # Guard: a tiny base model sometimes answers by REPEATING
             # the question. Parroting the input is not answering - fall
             # through to the echo, which is at least honest.
             if answer and answer.strip().lower() != user_input.strip().lower():
                 return answer
         return f"You said: {user_input}"
+
+    def _recent_exchanges(self, turns: int) -> list[tuple[str, str]]:
+        """Return the last `turns` (user, assistant) pairs, oldest first.
+
+        The conversation alternates user/assistant by construction, so
+        pairs are read backwards from the end and then reversed.
+
+        Args:
+            turns: How many pairs to keep (the context window).
+
+        Returns:
+            Up to `turns` pairs as (user_message, assistant_reply).
+        """
+        messages = self.conversation.messages
+        pairs: list[tuple[str, str]] = []
+        index = len(messages) - 1
+        while index >= 1 and len(pairs) < turns:
+            assistant, user = messages[index], messages[index - 1]
+            if user.role == "user" and assistant.role == "assistant":
+                pairs.append((user.content, assistant.content))
+            index -= 2
+        return list(reversed(pairs))
 
     def _answer_from_memory(self, normalized: str) -> str | None:
         """Answer a memory-backed question, or None if not a question.

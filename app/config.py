@@ -127,3 +127,8 @@ LLM_MODEL_ID: str = "HuggingFaceTB/SmolLM2-135M"
 LLM_MAX_NEW_TOKENS: int = 32
 LLM_TEMPERATURE: float = 0.0
 LLM_LOCAL_FILES_ONLY: bool = False
+# How many past (user, assistant) exchange pairs are written into the
+# LLM prompt (Phase 7, M2 - the context window). The window is small on
+# purpose: every pair costs prompt tokens and a 135M model drifts on
+# long prompts. 4 turns is a comfortable short-memory size.
+LLM_CONTEXT_TURNS: int = 4

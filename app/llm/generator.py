@@ -42,6 +42,30 @@ def qa_prompt(question: str) -> str:
     return f"Q: {question}\nA:"
 
 
+def context_prompt(exchanges: list[tuple[str, str]], question: str) -> str:
+    """Build a multi-turn prompt: recent history + the new question.
+
+    M2: an LLM is a next-token predictor - it CANNOT "remember" past
+    turns unless the conversation is literally written into the prompt.
+    Recent (user, assistant) pairs are rendered as the same Q/A format
+    the model was trained on (oldest first), and the current question
+    becomes the final unfinished pair it must complete.
+
+    Args:
+        exchanges: Previous (user_message, assistant_reply) pairs,
+            oldest first.
+        question: The new user message.
+
+    Returns:
+        The full prompt. With no history this degrades exactly to
+        qa_prompt(question) - a two-line chat is identical to a
+        one-shot question.
+    """
+    blocks = [f"Q: {user}\nA: {assistant}" for user, assistant in exchanges]
+    blocks.append(f"Q: {question}\nA:")
+    return "\n\n".join(blocks)
+
+
 class LLMGenerator:
     """Generate answers with a pre-trained causal language model.
 

@@ -5,17 +5,22 @@ roadmap. See the current phase below.
 
 ## Status
 
-- **Phase 7 (Large Language Models)**: M1 complete — a pre-trained
+- **Phase 7 (Large Language Models)**: complete — a pre-trained
   causal LM (`HuggingFaceTB/SmolLM2-135M`, runs on CPU, lazy-loaded on
-  the first unanswered question) now answers whatever the rules cannot
+  the first unanswered question) answers whatever the rules cannot
   (`app/llm/generator.py`). Ask "what is 2+2" and get "4". Priority
   stays: rules → taught facts → long-term memory → LLM → echo. It
-  degrades to the echo offline, and honestly reveals its limits (a 135M
-  base model has no world model: it answered "how many continents" with
-  "14", and parroting the question is detected and rejected). M2 adds a
-  conversation context window. `LLM_ENABLED`/`LLM_MODEL_ID`/
-  `LLM_MAX_NEW_TOKENS`/`LLM_TEMPERATURE`/`LLM_LOCAL_FILES_ONLY` in
-  `app/config.py`.
+  degrades to the echo offline. **M2 added a conversation context
+  window**: the last 4 exchange pairs are written into the prompt, so
+  Aria actually follows conversations — verified live:
+  "what is the capital of france" → "France", then "what about london"
+  → "London", then "and rome?" → "Rome". Honest limits: a 135M *base*
+  model has no world model (it answered "how many continents" with
+  "14"), so answers are plausible text, not guaranteed truth — the job
+  of RAG (Phase 9) and fine-tuning (Phase 19).
+  Knobs: `LLM_ENABLED`, `LLM_MODEL_ID`, `LLM_MAX_NEW_TOKENS`,
+  `LLM_TEMPERATURE` (0 = greedy/deterministic), `LLM_LOCAL_FILES_ONLY`,
+  `LLM_CONTEXT_TURNS` in `app/config.py`.
 - **Phase 6 (Transformers)**: complete — the transformer architecture
   built from scratch (`app/transformer/`): sinusoidal positional
   encoding, multi-head scaled dot-product attention, pre-norm encoder

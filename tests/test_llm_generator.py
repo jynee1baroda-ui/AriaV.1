@@ -15,7 +15,7 @@ touches the network.
 
 import unittest
 
-from app.llm.generator import LLMGenerator, qa_prompt
+from app.llm.generator import LLMGenerator, context_prompt, qa_prompt
 
 
 class StubEngine:
@@ -44,6 +44,35 @@ class TestQaPrompt(unittest.TestCase):
     def test_keeps_original_casing(self):
         self.assertEqual(qa_prompt("What is the Capital of France?"),
                          "Q: What is the Capital of France?\nA:")
+
+
+class TestContextPrompt(unittest.TestCase):
+    """Phase 7 M2: history must be written INTO the prompt."""
+
+    def test_empty_history_degrades_to_qa_prompt(self):
+        """A two-line chat is identical to a one-shot question."""
+        self.assertEqual(context_prompt([], "hi"), qa_prompt("hi"))
+
+    def test_single_exchange_precedes_the_question(self):
+        prompt = context_prompt([("what is the capital of france", "Paris.")], "what about london")
+        self.assertEqual(
+            prompt,
+            "Q: what is the capital of france\nA: Paris.\n\nQ: what about london\nA:",
+        )
+
+    def test_multiple_exchanges_oldest_first(self):
+        prompt = context_prompt(
+            [("first", "one"), ("second", "two")],
+            "third",
+        )
+        self.assertEqual(
+            prompt,
+            "Q: first\nA: one\n\nQ: second\nA: two\n\nQ: third\nA:",
+        )
+
+    def test_question_is_always_the_last_unfinished_pair(self):
+        prompt = context_prompt([("a", "b")], "new question")
+        self.assertTrue(prompt.endswith("Q: new question\nA:"))
 
 
 class TestGenerateWithEngine(unittest.TestCase):

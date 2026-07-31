@@ -9,7 +9,7 @@ and that its failure degrades to the echo instead of a crash.
 import unittest
 
 from app.assistant import Assistant
-from app.llm.generator import LLMGenerator, qa_prompt
+from app.llm.generator import LLMGenerator, context_prompt, qa_prompt
 from app.ml.dataset import Intent
 from app.models import Conversation, Memory
 from app.services.intent_router import IntentRouter
@@ -96,6 +96,45 @@ class TestAssistantWithLlm(unittest.TestCase):
     def test_no_llm_echoes(self):
         assistant = Assistant(name="Aria", conversation=Conversation())
         self.assertEqual(assistant.respond("pancakes"), "You said: pancakes")
+
+
+class TestAssistantContextWindow(unittest.TestCase):
+    """Phase 7 M2: past exchanges are written into the LLM prompt."""
+
+    def test_follow_up_question_includes_prior_exchange(self):
+        conversation = Conversation()
+        conversation.add("user", "what is the capital of france")
+        conversation.add("assistant", "Paris.")
+        generator, engine = llm_generator("London.")
+        assistant = Assistant(name="Aria", conversation=conversation, llm=generator)
+        self.assertEqual(assistant.respond("what about london"), "London.")
+        self.assertEqual(
+            engine.prompts,
+            [context_prompt([("what is the capital of france", "Paris.")], "what about london")],
+        )
+
+    def test_window_only_keeps_last_few_exchanges(self):
+        """The default 4-turn window must drop older exchanges."""
+        conversation = Conversation()
+        for user, reply in [("a", "1"), ("b", "2"), ("c", "3"), ("d", "4"), ("e", "5")]:
+            conversation.add("user", user)
+            conversation.add("assistant", reply)
+        generator, engine = llm_generator("ok")
+        assistant = Assistant(name="Aria", conversation=conversation, llm=generator)
+        assistant.respond("f")
+        self.assertEqual(
+            engine.prompts,
+            [context_prompt([("b", "2"), ("c", "3"), ("d", "4"), ("e", "5")], "f")],
+        )
+
+    def test_orphaned_messages_do_not_break_pairing(self):
+        """Odd role sequences must not crash extraction or the LLM."""
+        conversation = Conversation()
+        conversation.add("user", "orphan")
+        generator, engine = llm_generator("hi")
+        assistant = Assistant(name="Aria", conversation=conversation, llm=generator)
+        assistant.respond("what time is it")
+        self.assertEqual(engine.prompts, [context_prompt([], "what time is it")])
 
 
 if __name__ == "__main__":

@@ -13,7 +13,7 @@ completed phase leaves a working project behind.
 | 4 | Machine Learning | ✅ complete |
 | 5 | Deep Learning | ✅ complete |
 | 6 | Transformers | ✅ complete |
-| 7 | Large Language Models | 🔶 M1 complete (real LLM answers) |
+| 7 | Large Language Models | ✅ complete |
 | 8 | Prompt Engineering | ⬜ |
 | 9 | RAG | ⬜ |
 | 10 | Memory Systems | 🔶 foundation built (preview) |
@@ -30,11 +30,18 @@ completed phase leaves a working project behind.
 
 ## Notes
 
-- **Phase 7 (Large Language Models)** M1 complete: a pre-trained
-  causal LM (`HuggingFaceTB/SmolLM2-135M`, ~270 MB, runs on CPU) is
-  wired into the echo fallback via `app/llm/generator.py`. Lazy load,
-  graceful degradation to the echo, stub-injectable for tests. M2 adds
-  a conversation context window + honest capability assessment.
+- **Phase 7 (Large Language Models)** complete: a pre-trained causal LM
+  (`HuggingFaceTB/SmolLM2-135M`, runs on CPU) answers whatever the rules
+  cannot via `app/llm/generator.py`. M1: lazy load, greedy decoding
+  (deterministic), graceful degradation to the echo, MCQ/parrot
+  trimming, stub-injectable for tests. M2: a **conversation context
+  window** — the last 4 exchange pairs are written into the prompt, so
+  Aria resolves follow-ups ("what about london?" → "London" right after
+  "what is the capital of france" → "France"). Honest limits remain: a
+  135M *base* model has no world model (wrong on some facts, e.g.
+  "how many continents" → 14) and hallucinates confidently on unknown
+  topics. That is exactly what Phases 8 (prompting), 9 (RAG grounding)
+  and 19 (fine-tuning) exist to fix.
 - **Phase 10 (Memory Systems)** is the only phase with work done ahead
   of schedule: `memories` table, `MemoryRepository`, `MemoryService`
   (consolidation + retrieval). It is the storage foundation that RAG
