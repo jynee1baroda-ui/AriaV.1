@@ -92,3 +92,13 @@ RATE_LIMIT_WINDOW_SECONDS: int = 60
 # never load a session's entire unbounded history into memory.
 HISTORY_DEFAULT_LIMIT: int = 100
 HISTORY_MAX_LIMIT: int = 500
+
+# ML intent routing (Phase 4, M2): the classifier steers respond() only
+# when it is confident enough, and the deterministic rules remain the
+# safety net. Flip ENABLED off to return to pure rule-based dispatch.
+INTENT_CLASSIFIER_ENABLED: bool = True
+# Confidence must beat this to let ML override the rules. 0.5 means "the
+# model must favor one intent over every other"; lower lets ML act on
+# weaker signals (more aggressive), higher keeps rules in charge more
+# often (safer). Tune on real user messages, not the training set.
+INTENT_CONFIDENCE_THRESHOLD: float = 0.5

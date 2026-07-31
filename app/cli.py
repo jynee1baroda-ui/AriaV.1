@@ -32,6 +32,7 @@ if __package__ in (None, ""):
 from app import config, storage
 from app.assistant import Assistant
 from app.models import Conversation
+from app.services.intent_router import IntentRouter
 from app.services.memory_service import MemoryService
 
 logging.basicConfig(
@@ -48,13 +49,16 @@ def main() -> NoReturn:
 
     # 2. Build the assistant around that memory (composition). The
     #    MemoryService (Phase 5 M2) gives it long-term memory that
-    #    survives across sessions via the database.
+    #    survives across sessions via the database. The ML intent
+    #    router (Phase 4 M2) advises on intent when the trained model
+    #    exists; without one the assistant runs on rules alone.
     memory_service = MemoryService()
     assistant = Assistant(
         name=config.ASSISTANT_NAME,
         conversation=conversation,
         session_id="cli",
         memory_service=memory_service,
+        router=IntentRouter() if config.INTENT_CLASSIFIER_ENABLED else None,
     )
 
     # 3. Run, and GUARANTEE persistence on every exit path.

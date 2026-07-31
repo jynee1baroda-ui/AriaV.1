@@ -5,11 +5,15 @@ roadmap. See the current phase below.
 
 ## Status
 
-- **Phase 4 (Machine Learning)**: in progress — building a supervised
-  intent classifier (TF-IDF + logistic regression) as the ML module
-  (`app/ml/`); integration into the Assistant's reply routing is the
-  following milestone. Latest phase-by-phase status lives in
-  [ROADMAP.md](ROADMAP.md).
+- **Phase 4 (Machine Learning)**: complete — a supervised intent
+  classifier (`app/ml/`): TF-IDF + logistic regression trained on 149
+  labeled examples, honest held-out evaluation (~70% accuracy; the
+  honest tradeoff vs. the Phase 7 LLM), and a persisted artifact
+  (`python -m app.ml.train` regenerates it). The Assistant now routes
+  through `IntentRouter` — ML steers the reply branch only when
+  confidence ≥ threshold (default 0.5, config-gated), the deterministic
+  rules confirm details and remain the safety net. Latest phase-by-phase
+  status lives in [ROADMAP.md](ROADMAP.md).
 - **Engineering hardening**: rate limiting on `POST /chat` (fixed-window
   per-IP, 429 + Retry-After, probes exempt) and pagination on
   `GET /history` (`limit` 1–500, `offset` ≥ 0, self-describing

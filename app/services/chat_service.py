@@ -27,6 +27,7 @@ from app.errors import InvalidSessionIdError
 from app.models import Conversation, Message
 from app.persistence.memory_repository import MemoryRepository
 from app.persistence.message_repository import MessageRepository
+from app.services.intent_router import IntentRouter
 from app.services.memory_service import MemoryService
 
 
@@ -37,6 +38,7 @@ class ChatService:
         self,
         repository: MessageRepository | None = None,
         memory_service: MemoryService | None = None,
+        router: IntentRouter | None = None,
     ) -> None:
         # Injection point: tests build a repository over a temp database
         # so test sessions never touch the real data/assistant.db. The
@@ -46,6 +48,10 @@ class ChatService:
         self._memory = memory_service or MemoryService(
             MemoryRepository(self._repository.engine)
         )
+        # Phase 4 M2: the shared ML intent router (or None = rules only).
+        # One router per service, reused across turns and threads - it
+        # lazily loads the model once and gates on confidence.
+        self._router = router
         self._sessions: dict[str, Conversation] = {}
         # One lock guarding ALL session access. Correct and simple.
         # (Improvement for Phase 7: per-session locks, so a slow chat
@@ -81,6 +87,7 @@ class ChatService:
                 conversation=conversation,
                 session_id=session_id,
                 memory_service=self._memory,
+                router=self._router,
             )
             reply = assistant.respond(message)
             # Persist ONLY the messages appended by this turn

@@ -10,7 +10,7 @@ completed phase leaves a working project behind.
 | 1 | Programming fundamentals | ✅ complete |
 | 2 | Backend development | ✅ complete |
 | 3 | Databases | ✅ complete |
-| 4 | Machine Learning | 🚧 in progress |
+| 4 | Machine Learning | ✅ complete |
 | 5 | Deep Learning | ⬜ |
 | 6 | Transformers | ⬜ |
 | 7 | Large Language Models | ⬜ |

@@ -22,6 +22,7 @@ from app.api.routes import router
 from app.errors import InvalidSessionIdError
 from app.security.rate_limiter import RateLimiter
 from app.services.chat_service import ChatService
+from app.services.intent_router import IntentRouter
 
 
 def create_app() -> FastAPI:
@@ -53,8 +54,12 @@ def create_app() -> FastAPI:
     )
     # The composition root owns the service's lifecycle. Routes access
     # it via Depends(), which keeps them testable (an override can swap
-    # a fake service in without touching route code).
-    app.state.chat_service = ChatService()
+    # a fake service in without touching route code). The ML intent
+    # router (Phase 4 M2) is shared across requests and degrades to
+    # rules if the model artifact is missing.
+    app.state.chat_service = ChatService(
+        router=IntentRouter() if config.INTENT_CLASSIFIER_ENABLED else None
+    )
 
     # The abuse guard: one limiter shared by every request. Routes
     # enforce it via Depends(); tests can override with a tiny limit.

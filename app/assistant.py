@@ -13,10 +13,15 @@ the pieces independently testable.
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from app import config
+from app.ml.dataset import Intent
 from app.models import Conversation, Memory
 from app.services.memory_service import MemoryExtractor, MemoryService
+
+if TYPE_CHECKING:
+    from app.services.intent_router import IntentRouter
 
 logger = logging.getLogger("assistant")
 
@@ -49,12 +54,17 @@ class Assistant:
         memories: list[Memory] | None = None,
         session_id: str | None = None,
         memory_service: MemoryService | None = None,
+        router: IntentRouter | None = None,
     ) -> None:
         self.name = name
         self.conversation = conversation
         self.memories: list[Memory] = list(memories) if memories else []
         self.session_id = session_id
         self.memory_service = memory_service
+        # Phase 4 M2: the ML intent router. When present it gets first
+        # shot at every message; when it declines (low confidence or
+        # model unavailable) the deterministic rules answer instead.
+        self.router = router
 
     # ------------------------------------------------------------------
     # Core behavior
@@ -72,6 +82,13 @@ class Assistant:
         Alice" is stored, and a question like "what is my name" is
         answered from long-term memory, even across sessions.
 
+        Phase 4 M2 routing: the intent router (ML) is consulted first,
+        but ONLY as an advisor. If it returns a confident intent we try
+        that branch; the branch must still satisfy its own rules (the
+        extractor must find a fact, memory must hold an answer), and if
+        it cannot - or if ML declines - we fall back to the
+        deterministic dispatch below. ML suggests, rules confirm.
+
         Args:
             user_input: The text the user typed.
 
@@ -86,26 +103,74 @@ class Assistant:
         # matches "hello" - the foundation of all NLP preprocessing.
         normalized: str = user_input.lower().strip(" !?.,;:")
 
-        # Guard: input of only punctuation has nothing left to split.
-        first_word: str = normalized.split()[0] if normalized else ""
-
-        if first_word in config.GREETING_WORDS:
-            reply = f"Hello! I'm {self.name}. How can I help?"
-        elif normalized in {"what is your name", "what's your name", "who are you"}:
-            reply = f"My name is {self.name}."
-        else:
-            # STATEMENTS that teach a fact are answered from the text
-            # itself; the extractor also supplies the confirmation text.
-            extracted = MemoryExtractor.extract(user_input)
-            if extracted:
-                reply = extracted[0].reply
-            else:
-                # QUESTIONS that consult long-term memory come next.
-                reply = self._answer_from_memory(normalized) or f"You said: {user_input}"
+        reply = self._route_reply(user_input, normalized) or self._rule_reply(user_input, normalized)
 
         self.conversation.add("user", user_input)
         self.conversation.add("assistant", reply)
         return reply
+
+    def _route_reply(self, user_input: str, normalized: str) -> str | None:
+        """Phase 4 M2: let a confident ML intent pick the reply branch.
+
+        Returns None to defer to the rules. The coarse intent only
+        chooses the BRANCH; the details still come from the rules
+        (MemoryExtractor for teach statements, MemoryService for recall
+        questions), because rules extract structured facts the model
+        does not.
+
+        Args:
+            user_input: Raw text (the extractor wants original casing).
+            normalized: Lowercased/punctuation-stripped text (the
+                memory question matcher expects it this way).
+
+        Returns:
+            A reply, or None when ML cannot answer confidently.
+        """
+        if self.router is None:
+            return None
+        intent = self.router.route(user_input)
+        if intent is None:
+            return None
+
+        if intent is Intent.GREETING:
+            return f"Hello! I'm {self.name}. How can I help?"
+        if intent is Intent.ASSISTANT_IDENTITY:
+            return f"My name is {self.name}."
+        if intent is Intent.TEACH_FACT:
+            extracted = MemoryExtractor.extract(user_input)
+            return extracted[0].reply if extracted else None
+        if intent is Intent.RECALL_QUESTION:
+            return self._answer_from_memory(normalized)
+        return f"You said: {user_input}"  # Intent.OTHER
+
+    def _rule_reply(self, user_input: str, normalized: str) -> str:
+        """Deterministic fallback - the original Phase 1-3 dispatch.
+
+        Ran whenever ML is absent, declines, or cannot fulfill its
+        intent branch. Order matters (greeting beats extraction beats
+        echo); changing it changes real answers.
+
+        Args:
+            user_input: Raw user text.
+            normalized: Lowercased/punctuation-stripped user text.
+
+        Returns:
+            The reply text.
+        """
+        # Guard: input of only punctuation has nothing left to split.
+        first_word: str = normalized.split()[0] if normalized else ""
+
+        if first_word in config.GREETING_WORDS:
+            return f"Hello! I'm {self.name}. How can I help?"
+        if normalized in {"what is your name", "what's your name", "who are you"}:
+            return f"My name is {self.name}."
+        # STATEMENTS that teach a fact are answered from the text
+        # itself; the extractor also supplies the confirmation text.
+        extracted = MemoryExtractor.extract(user_input)
+        if extracted:
+            return extracted[0].reply
+        # QUESTIONS that consult long-term memory come next.
+        return self._answer_from_memory(normalized) or f"You said: {user_input}"
 
     def _answer_from_memory(self, normalized: str) -> str | None:
         """Answer a memory-backed question, or None if not a question.
