@@ -38,6 +38,12 @@ GREETING_WORDS: set[str] = {"hello", "hi", "hey", "yo", "hiya", "hola"}
 # REPL_PROMPT is the text shown before each input.
 REPL_PROMPT: str = "You> "
 
+# Whitelist for session identifiers. Sessions become FILE NAMES in M3,
+# so this pattern is a security control (path traversal defense), not
+# just a style rule. Only letters, digits, underscore, hyphen - never
+# dots or slashes that could escape the sessions directory.
+SESSION_ID_PATTERN: str = r"^[A-Za-z0-9_-]{1,64}$"
+
 # Welcome banner (f-string interpolation built at import time)
 WELCOME_MESSAGE: str = (
     f"AI Assistant {ASSISTANT_NAME} v{ASSISTANT_VERSION}. "

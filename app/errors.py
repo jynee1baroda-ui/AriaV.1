@@ -33,3 +33,12 @@ class InvalidRoleError(ConversationError):
     Example:
         conversation.add("robot", "beep")  # -> InvalidRoleError
     """
+
+
+class InvalidSessionIdError(AssistantError):
+    """Raised when a session id fails the whitelist.
+
+    Session ids become file names; allowing arbitrary characters would
+    enable path traversal (e.g. "../evil"). The API layer rejects these
+    with 422; this error is the service layer's defense in depth.
+    """

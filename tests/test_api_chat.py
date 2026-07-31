@@ -1,18 +1,42 @@
-"""API tests for chat and history (Phase 2, Milestone 2)."""
+"""API tests for chat and history (Phase 2, Milestones 2 + 3).
 
+These tests exercise the REAL HTTP layer (TestClient) but override the
+ChatService dependency with one backed by a temporary directory, so
+test sessions never pollute data/.
+"""
+
+import tempfile
 import unittest
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from app.api.routes import get_chat_service
 from app.main import app
+from app.services.chat_service import ChatService
 
 
-class TestChatEndpoint(unittest.TestCase):
-    """POST /api/v1/chat must reply and validate."""
+class ChatApiTestCase(unittest.TestCase):
+    """Shared setup: a temp-dir-backed service injected via Depends."""
 
     @classmethod
     def setUpClass(cls) -> None:
+        cls._tmpdir = tempfile.TemporaryDirectory()
+        service = ChatService(sessions_dir=Path(cls._tmpdir.name))
+        # Dependency override: every request now receives THIS service.
+        # This is why Depends() exists - swap an implementation without
+        # touching route code.
+        app.dependency_overrides[get_chat_service] = lambda: service
         cls.client = TestClient(app)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        app.dependency_overrides.clear()
+        cls._tmpdir.cleanup()
+
+
+class TestChatEndpoint(ChatApiTestCase):
+    """POST /api/v1/chat must reply and validate."""
 
     def test_chat_greeting_returns_reply(self) -> None:
         response = self.client.post(
@@ -54,12 +78,40 @@ class TestChatEndpoint(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
 
 
-class TestHistoryEndpoint(unittest.TestCase):
-    """GET /api/v1/history/{session_id} must return the conversation."""
+class TestSessionIdSecurity(ChatApiTestCase):
+    """Path traversal attempts must be rejected at the boundary."""
 
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.client = TestClient(app)
+    def test_slash_is_rejected(self) -> None:
+        response = self.client.post(
+            "/api/v1/chat",
+            json={"session_id": "evil/../id", "message": "hi"},
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_dotdot_is_rejected(self) -> None:
+        response = self.client.post(
+            "/api/v1/chat",
+            json={"session_id": "..", "message": "hi"},
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_whitespace_is_rejected(self) -> None:
+        response = self.client.post(
+            "/api/v1/chat",
+            json={"session_id": "bad id", "message": "hi"},
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_backslash_is_rejected(self) -> None:
+        response = self.client.post(
+            "/api/v1/chat",
+            json={"session_id": "..\\..\\evil", "message": "hi"},
+        )
+        self.assertEqual(response.status_code, 422)
+
+
+class TestHistoryEndpoint(ChatApiTestCase):
+    """GET /api/v1/history/{session_id} must return the conversation."""
 
     def test_history_records_both_sides_of_exchange(self) -> None:
         self.client.post(
@@ -81,12 +133,8 @@ class TestHistoryEndpoint(unittest.TestCase):
         self.assertEqual(response.json()["messages"], [])
 
 
-class TestSessionIsolation(unittest.TestCase):
+class TestSessionIsolation(ChatApiTestCase):
     """Sessions must never leak into each other."""
-
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.client = TestClient(app)
 
     def test_two_sessions_stay_separate(self) -> None:
         self.client.post("/api/v1/chat", json={"session_id": "iso-A", "message": "hi"})
@@ -97,7 +145,6 @@ class TestSessionIsolation(unittest.TestCase):
 
         self.assertEqual(len(hist_a["messages"]), 2)
         self.assertEqual(len(hist_b["messages"]), 2)
-        # Each conversation contains only its own user message
         self.assertEqual(hist_a["messages"][0]["content"], "hi")
         self.assertEqual(hist_b["messages"][0]["content"], "hey")
 

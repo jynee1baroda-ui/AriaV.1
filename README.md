@@ -5,10 +5,12 @@ roadmap. See the current phase below.
 
 ## Status
 
-- **Phase 2 (Backend Development)**: Milestone 2 complete — `POST
-  /api/v1/chat` and `GET /api/v1/history/{session_id}` with Pydantic
-  validation, in-memory session isolation, thread-safe `ChatService`.
-  44 passing tests.
+- **Phase 2 (Backend Development)**: Milestone 3 complete — durable
+  sessions: per-session files (`data/sessions/<id>.json`), restart
+  recovery, session_id whitelist (path-traversal defense), injected
+  service for testable temp-dir storage. 53 passing tests.
+- **Phase 2, Milestone 2**: `POST /chat` + `GET /history` with
+  thread-safe in-memory sessions.
 - **Phase 2, Milestone 1**: FastAPI skeleton + `/health` + venv.
 - Phase 1 (Programming Fundamentals) complete — REPL assistant with
   persistent memory, exception hierarchy, atomic file writes, git/GitHub.

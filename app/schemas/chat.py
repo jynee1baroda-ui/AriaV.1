@@ -7,7 +7,11 @@ stripped. Invalid requests never touch business logic.
 
 from __future__ import annotations
 
+import re
+
 from pydantic import BaseModel, Field, field_validator
+
+from app import config
 
 # Cap message size so one request can't carry gigabytes of text.
 MAX_MESSAGE_LENGTH: int = 4000
@@ -43,6 +47,23 @@ class ChatRequest(BaseModel):
         min_length - so we strip first, then reject anything empty.
         """
         return value.strip()
+
+    @field_validator("session_id")
+    @classmethod
+    def validate_session_id(cls, value: str) -> str:
+        """Enforce the session_id whitelist.
+
+        Session ids become file names in M3, so this is a security
+        control: rejecting dots and slashes stops path traversal. The
+        max_length=64 Field plus this regex keep ids bounded and safe.
+        """
+        value = value.strip()
+        if not re.fullmatch(config.SESSION_ID_PATTERN, value):
+            raise ValueError(
+                "session_id must be 1-64 characters: letters, digits, "
+                "underscore, or hyphen"
+            )
+        return value
 
     @field_validator("message")
     @classmethod

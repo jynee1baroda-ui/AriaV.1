@@ -11,10 +11,12 @@ add dependency injection in M2, the factory is where overrides plug in.
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from app import config
 from app.api.routes import router
+from app.errors import InvalidSessionIdError
 from app.services.chat_service import ChatService
 
 
@@ -32,6 +34,14 @@ def create_app() -> FastAPI:
     # it via Depends(), which keeps them testable (an override can swap
     # a fake service in without touching route code).
     app.state.chat_service = ChatService()
+
+    # If the service's own defense-in-depth validation fires (a bad id
+    # that slipped past the schema), surface it as a clean 400 instead
+    # of a 500. Never let a validation failure look like a server bug.
+    @app.exception_handler(InvalidSessionIdError)
+    async def invalid_session_handler(request: Request, exc: InvalidSessionIdError) -> JSONResponse:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+
     app.include_router(router)
     return app
 
