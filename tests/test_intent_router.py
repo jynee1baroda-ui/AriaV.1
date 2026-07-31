@@ -14,6 +14,7 @@ from pathlib import Path
 from app.dl.neural_classifier import NeuralIntentClassifier
 from app.ml.dataset import INTENT_EXAMPLES, Intent
 from app.services.intent_router import IntentRouter
+from app.transformer.classifier import TransformerIntentClassifier
 
 
 class StubClassifier:
@@ -106,11 +107,25 @@ class TestIntentRouterModelSelection(unittest.TestCase):
             router = IntentRouter(kind="neural", artifact_path=missing)
             self.assertIsNone(router.route("hello"))
 
+    def test_injected_transformer_classifier_is_used(self):
+        """Phase 6 M2: the from-scratch transformer drives the router
+        exactly like the other two backends."""
+        transformer = TransformerIntentClassifier.train(INTENT_EXAMPLES, epochs=5)
+        router = IntentRouter(classifier=transformer, kind="transformer", threshold=0.0)
+        intent, _ = transformer.predict("hello")
+        self.assertEqual(router.route("hello"), intent)
+
+    def test_missing_transformer_artifact_degrades_gracefully(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "no_transformer.pt"
+            router = IntentRouter(kind="transformer", artifact_path=missing)
+            self.assertIsNone(router.route("hello"))
+
     def test_unknown_kind_fails_fast(self):
         """A typo in config must explode at construction, not silently
         fall back at the first chat."""
         with self.assertRaises(ValueError):
-            IntentRouter(kind="transformer")
+            IntentRouter(kind="recurrent")
 
 
 if __name__ == "__main__":

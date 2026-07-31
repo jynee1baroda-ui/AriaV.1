@@ -5,6 +5,16 @@ roadmap. See the current phase below.
 
 ## Status
 
+- **Phase 6 (Transformers)**: complete — the transformer architecture
+  built from scratch (`app/transformer/`): sinusoidal positional
+  encoding, multi-head scaled dot-product attention, pre-norm encoder
+  blocks, a word tokenizer/vocab, and a `TransformerIntentClassifier`
+  with the same drop-in API. The controlled experiment is the honest
+  punchline: **from-scratch attention trails the Phase 4 baseline
+  (60.5% vs 71.1%)** — without pre-training, attention alone is worse
+  at this data scale. Selectable via `INTENT_MODEL_KIND="transformer"`;
+  it is the architectural foundation Phase 7 loads language knowledge
+  into.
 - **Phase 5 (Deep Learning)**: complete — a PyTorch neural intent
   classifier (`app/dl/`): the same TF-IDF features through a
   hidden-layer MLP trained with a real backprop loop, early stopping,

@@ -27,9 +27,10 @@ Why advisory instead of "ML everywhere"? Three honest reasons:
 Graceful degradation is a feature, not a fallback: every failure mode
 below resolves to "let the rules decide" and logs a single warning.
 
-Phase 5, M2: the router can load either model backend - the Phase 4
-logistic regression ("linear", the default) or the Phase 5 PyTorch
-MLP ("neural") - selected by config.INTENT_MODEL_KIND. They share the
+Phase 5/6 M2: the router can load any of three model backends - the
+Phase 4 logistic regression ("linear", the default), the Phase 5
+PyTorch MLP ("neural"), or the Phase 6 from-scratch transformer
+("transformer") - selected by config.INTENT_MODEL_KIND. They share the
 same predict API, so the gating logic below is backend-agnostic.
 """
 
@@ -44,13 +45,16 @@ from app.dl.neural_classifier import DEFAULT_ARTIFACT_PATH as NEURAL_ARTIFACT_PA
 from app.dl.neural_classifier import NeuralIntentClassifier
 from app.ml.dataset import Intent
 from app.ml.intent_classifier import IntentClassifier, DEFAULT_ARTIFACT_PATH
+from app.transformer.classifier import DEFAULT_ARTIFACT_PATH as TRANSFORMER_ARTIFACT_PATH
+from app.transformer.classifier import TransformerIntentClassifier
 
 logger = logging.getLogger("assistant.ml")
 
 # Allowed model backends. "linear" = Phase 4 logistic regression;
-# "neural" = Phase 5 PyTorch MLP. Both expose the same predict API, so
-# the router treats them identically (duck typing).
-_SUPPORTED_KINDS: frozenset[str] = frozenset({"linear", "neural"})
+# "neural" = Phase 5 PyTorch MLP; "transformer" = Phase 6 from-scratch
+# transformer. All expose the same predict API, so the router treats
+# them identically (duck typing).
+_SUPPORTED_KINDS: frozenset[str] = frozenset({"linear", "neural", "transformer"})
 
 
 class IntentRouter:
@@ -60,7 +64,8 @@ class IntentRouter:
         _classifier: The trained model (linear or neural), or None.
         _threshold:  Minimum confidence to act (default 0.5).
         _enabled:    Master switch (config.INTENT_CLASSIFIER_ENABLED).
-        _kind:       Which model backend to load ("linear" | "neural").
+        _kind:       Which model backend to load ("linear" | "neural"
+            | "transformer").
         _artifact_path: Where to load the model from.
         _load_lock:  Guards lazy loading across threads (FastAPI runs
             handlers in a threadpool, so the first chat can race).
@@ -82,12 +87,15 @@ class IntentRouter:
         self._threshold = threshold
         self._enabled = enabled
         self._kind = kind
-        # The artifact default depends on the backend: the two models
+        # The artifact default depends on the backend: the models
         # persist in different formats (joblib vs torch) at different
         # paths. An explicit artifact_path overrides for tests.
-        self._artifact_path = artifact_path or (
-            DEFAULT_ARTIFACT_PATH if kind == "linear" else NEURAL_ARTIFACT_PATH
-        )
+        _artifacts: dict[str, Path] = {
+            "linear": DEFAULT_ARTIFACT_PATH,
+            "neural": NEURAL_ARTIFACT_PATH,
+            "transformer": TRANSFORMER_ARTIFACT_PATH,
+        }
+        self._artifact_path = artifact_path or _artifacts[kind]
         self._load_lock = threading.Lock()
 
     def route(self, text: str) -> Intent | None:
@@ -138,12 +146,13 @@ class IntentRouter:
             if self._classifier is not None:
                 return self._classifier
             try:
-                loader = (
-                    NeuralIntentClassifier.load
-                    if self._kind == "neural"
-                    else IntentClassifier.load
-                )
-                return loader(self._artifact_path)
+                loaders: dict[str, object] = {
+                    "linear": IntentClassifier.load,
+                    "neural": NeuralIntentClassifier.load,
+                    "transformer": TransformerIntentClassifier.load,
+                }
+                loader = loaders[self._kind]
+                return loader(self._artifact_path)  # type: ignore[operator]
             except Exception:
                 logger.exception("ML router: model failed to load - running on rules only.")
                 self._enabled = False

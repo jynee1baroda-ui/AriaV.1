@@ -102,9 +102,12 @@ INTENT_CLASSIFIER_ENABLED: bool = True
 # weaker signals (more aggressive), higher keeps rules in charge more
 # often (safer). Tune on real user messages, not the training set.
 INTENT_CONFIDENCE_THRESHOLD: float = 0.5
-# Which trained model the router loads (Phase 5, M2): "linear" is the
-# Phase 4 logistic regression, "neural" the Phase 5 PyTorch MLP. Both
-# tie at 71.1% held-out accuracy, so "linear" stays the default: it is
-# faster, simpler, and interpretable. Flip to "neural" to run the deep
-# learning model in production.
+# Which trained model the router loads (Phase 5 M2 / Phase 6 M2):
+#   "linear"      - Phase 4 logistic regression (default: fastest,
+#                   simplest, interpretable; matches the neural net's
+#                   71.1% held-out accuracy),
+#   "neural"      - Phase 5 PyTorch MLP (ties the linear model),
+#   "transformer" - Phase 6 from-scratch transformer (currently trails
+#                   at 60.5% without pre-training; the architecture is
+#                   the Phase 7 foundation).
 INTENT_MODEL_KIND: str = "linear"

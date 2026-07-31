@@ -12,7 +12,7 @@ completed phase leaves a working project behind.
 | 3 | Databases | ✅ complete |
 | 4 | Machine Learning | ✅ complete |
 | 5 | Deep Learning | ✅ complete |
-| 6 | Transformers | ⬜ |
+| 6 | Transformers | ✅ complete |
 | 7 | Large Language Models | ⬜ |
 | 8 | Prompt Engineering | ⬜ |
 | 9 | RAG | ⬜ |
