@@ -144,16 +144,27 @@ class LLMGenerator:
     # Generation internals
     # ------------------------------------------------------------------
     def _generate_real(self, prompt: str) -> str:
-        """Run the real model: tokenize, generate, decode the new tokens."""
+        """Run the real model: tokenize, generate, decode the new tokens.
+
+        Default is GREEDY decoding (do_sample=False): pick the single
+        most likely token each step. Deterministic - the same question
+        gets the same answer every time, and a 135M base model is too
+        small to be worth sampling from. Setting temperature > 0 opts
+        into sampling, which trades reproducibility for variety.
+        """
         inputs = self._tokenizer(prompt, return_tensors="pt")  # type: ignore[union-attr]
-        generated = self._model.generate(  # type: ignore[union-attr]
-            **inputs,
+        generate_kwargs: dict = dict(
             max_new_tokens=self._max_new_tokens,
-            do_sample=True,
-            temperature=self._temperature,
-            top_p=0.9,
+            do_sample=False,
             pad_token_id=self._tokenizer.eos_token_id,  # type: ignore[union-attr]
         )
+        if self._temperature > 0:
+            generate_kwargs.update(
+                do_sample=True,
+                temperature=self._temperature,
+                top_p=0.9,
+            )
+        generated = self._model.generate(**inputs, **generate_kwargs)  # type: ignore[union-attr]
         new_tokens = generated[0][inputs["input_ids"].shape[1]:]
         return self._tokenizer.decode(new_tokens, skip_special_tokens=True)  # type: ignore[union-attr]
 
