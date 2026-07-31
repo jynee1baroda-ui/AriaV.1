@@ -3,3 +3,6 @@
 fastapi==0.141.1
 uvicorn[standard]==0.52.0
 httpx==0.28.1
+# Phase 4 (M1): database access + env-file configuration.
+sqlalchemy==2.0.51
+python-dotenv==1.1.0

@@ -11,10 +11,13 @@ add dependency injection in M2, the factory is where overrides plug in.
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app import config
+from app import config, db
 from app.api.routes import router
 from app.errors import InvalidSessionIdError
 from app.services.chat_service import ChatService
@@ -26,9 +29,23 @@ def create_app() -> FastAPI:
     Returns:
         A configured FastAPI instance ready to serve.
     """
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        """Startup: ensure tables exist. Shutdown: close the DB pool.
+
+        The lifespan runs when the server actually starts (uvicorn or a
+        TestClient used as a context manager) - the correct place for
+        infrastructure setup, not module import time.
+        """
+        db.init_db()
+        yield
+        db.engine.dispose()
+
     app = FastAPI(
         title=f"AI Assistant {config.ASSISTANT_NAME}",
         version=config.ASSISTANT_VERSION,
+        lifespan=lifespan,
     )
     # The composition root owns the service's lifecycle. Routes access
     # it via Depends(), which keeps them testable (an override can swap

@@ -11,6 +11,16 @@ in main.py, is the Single Responsibility principle (SOLID).
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Load .env if present (it is gitignored; never commit real values).
+# The .env.example file documents every variable we read.
+_PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent
+load_dotenv(_PROJECT_ROOT / ".env")
+
 # str - immutable text
 ASSISTANT_NAME: str = "Aria"
 
@@ -49,3 +59,21 @@ WELCOME_MESSAGE: str = (
     f"AI Assistant {ASSISTANT_NAME} v{ASSISTANT_VERSION}. "
     "Type /help for commands."
 )
+
+
+def _default_database_url() -> str:
+    """Derive a sensible local SQLite URL when DATABASE_URL is unset.
+
+    Uses forward slashes (as_posix) because SQLAlchemy treats the
+    sqlite URL path as a file path and backslashes break it. In the
+    deploy phase, DATABASE_URL will point at PostgreSQL and this
+    function becomes irrelevant.
+    """
+    db_path: Path = _PROJECT_ROOT / "data" / "assistant.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    return f"sqlite:///{db_path.as_posix()}"
+
+
+# Database connection string. Read from environment (or .env) so the
+# SAME code runs against SQLite locally and PostgreSQL in production.
+DATABASE_URL: str = os.getenv("DATABASE_URL", _default_database_url())
